@@ -19,6 +19,7 @@ impl Connection {
         unsafe {
             let flags = ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE;
 
+            // This routine opens a connection to an SQLite database file and returns a database connection object.
             let result = ffi::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags, ptr::null_mut());
 
             if result != ffi::SQLITE_OK {
@@ -32,7 +33,7 @@ impl Connection {
                 }
             }
 
-
+            // NOTE: currently copied from rusqlite, idk what it does yet
             ffi::sqlite3_extended_result_codes(db, 1);
 
             let result = ffi::sqlite3_busy_timeout(db, 5000);
@@ -51,9 +52,11 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
+        // Many applications destroy their database connections using calls to sqlite3_close() at shutdown.
         unsafe { ffi::sqlite3_close(self.db) };
     }
 }
+
 
 #[cfg(unix)]
 fn path_to_cstring(path: &Path) -> Result<CString, std::ffi::NulError> {
