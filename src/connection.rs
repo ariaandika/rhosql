@@ -5,7 +5,7 @@ use std::{
     ptr,
 };
 
-use crate::{error::general, BoxError};
+use crate::{common::FfiExt, error::general, BoxError};
 
 pub struct Connection {
     db: *mut ffi::sqlite3,
@@ -48,6 +48,62 @@ impl Connection {
 
         Ok(Self { db })
     }
+
+    pub fn query(&mut self, sql: &str) -> Result<(), BoxError> {
+        // To run an SQL statement, the application follows these steps:
+
+        // - Create a prepared statement using sqlite3_prepare().
+
+        let mut stmt = ptr::null_mut();
+
+        unsafe {
+            let (zsql,len,_) = sql.as_sqlite_cstr()?;
+
+            let result = ffi::sqlite3_prepare_v2(self.db, zsql, len, &mut stmt, &mut ptr::null());
+            if result != ffi::SQLITE_OK {
+                todo!("failed to create prepare")
+            }
+            if stmt.is_null() {
+                todo!("pp_stmt is null")
+            }
+        }
+
+        // - Evaluate the prepared statement by calling sqlite3_step() one or more times.
+        unsafe {
+            loop {
+                let result = ffi::sqlite3_step(stmt);
+                match result {
+                    ffi::SQLITE_ERROR => todo!("failed to step prepare"),
+                    ffi::SQLITE_ROW => { }
+                    ffi::SQLITE_DONE => break,
+                    _ => unreachable!(),
+                }
+
+                // - For queries, extract results by calling sqlite3_column() in between two calls to sqlite3_step().
+                match ffi::sqlite3_column_type(stmt, 0) {
+                    ffi::SQLITE_INTEGER => println!{"SQLITE_INTEGER"},
+                    ffi::SQLITE_FLOAT => println!{"SQLITE_FLOAT"},
+                    ffi::SQLITE_TEXT => println!{"SQLITE_TEXT"},
+                    ffi::SQLITE_BLOB => println!{"SQLITE_BLOB"},
+                    ffi::SQLITE_NULL => println!{"SQLITE_NULL"},
+                    _ => unreachable!()
+                }
+                let text = ffi::sqlite3_column_text(stmt, 0).cast::<std::ffi::c_char>();
+                let gg = CStr::from_ptr(text);
+                println!("{gg:?}");
+            }
+        }
+
+        // - Destroy the prepared statement using sqlite3_finalize().
+        unsafe {
+            let _result = ffi::sqlite3_finalize(stmt);
+        }
+
+        // The foregoing is all one really needs to know in order to use SQLite effectively.
+        // All the rest is optimization and detail.
+
+        Ok(())
+    }
 }
 
 impl Drop for Connection {
@@ -72,6 +128,7 @@ fn path_to_cstring(path: &Path) -> Result<CString, std::ffi::NulError>  {
 
 #[test]
 fn test() {
-    let _db = Connection::open("db.sqlite");
+    let mut db = Connection::open("db.sqlite").unwrap();
+    db.query("select 'foobar'").unwrap();
 }
 
