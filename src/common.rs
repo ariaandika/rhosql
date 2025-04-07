@@ -1,11 +1,6 @@
 use libsqlite3_sys::{self as ffi};
 use std::ffi::{c_char, c_int};
 
-mod general;
-
-pub(crate) use general::general;
-pub use general::General;
-
 use crate::{Error, Result};
 
 pub trait FfiExt {
