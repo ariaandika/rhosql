@@ -5,15 +5,17 @@ use std::{
     ptr,
 };
 
-use crate::{common::FfiExt, error::general, BoxError};
+use crate::{common::{general, FfiExt}, Error, Result};
 
 pub struct Connection {
     db: *mut ffi::sqlite3,
 }
 
 impl Connection {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, BoxError> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let mut db = ptr::null_mut();
+
+        // The filename argument is interpreted as UTF-8 for `sqlite3_open_v2()`
         let c_path = path_to_cstring(path.as_ref())?;
 
         unsafe {
@@ -24,12 +26,12 @@ impl Connection {
 
             if result != ffi::SQLITE_OK {
                 if db.is_null() {
-                    Err(ffi::Error::new(result))?
+                    Err(ffi::Error::new(result))?;
                 } else {
                     let err = ffi::sqlite3_errmsg(db);
                     let err = CStr::from_ptr(err).to_string_lossy();
                     ffi::sqlite3_close(db);
-                    Err(general!("{err}"))?
+                    Err(Error::Open(general!("{err}")))?;
                 }
             }
 
@@ -42,14 +44,14 @@ impl Connection {
                 let err = ffi::sqlite3_errmsg(db);
                 let err = CStr::from_ptr(err).to_string_lossy();
                 ffi::sqlite3_close(db);
-                Err(general!("{err}"))?
+                Err(Error::Open(general!("{err}")))?;
             }
         }
 
         Ok(Self { db })
     }
 
-    pub fn query(&mut self, sql: &str) -> Result<(), BoxError> {
+    pub fn query(&mut self, sql: &str) -> Result<()> {
         // To run an SQL statement, the application follows these steps:
 
         // - Create a prepared statement using sqlite3_prepare().
@@ -115,14 +117,18 @@ impl Drop for Connection {
 
 
 #[cfg(unix)]
-fn path_to_cstring(path: &Path) -> Result<CString, std::ffi::NulError> {
+fn path_to_cstring(path: &Path) -> Result<CString> {
     use std::os::unix::ffi::OsStrExt;
     CString::new(path.as_os_str().as_bytes())
+        .map_err(|_|Error::NulStringOpen(path.to_owned()))
 }
 
 #[cfg(not(unix))]
-fn path_to_cstring(path: &Path) -> Result<CString, std::ffi::NulError>  {
-    todo!()
+/// The filename argument is interpreted as UTF-8 for `sqlite3_open_v2()`
+fn path_to_cstring(path: &Path) -> Result<CString> {
+    path.to_str()
+        .ok_or_else(|| Error::NonUtf8Open(path.to_owned()))
+        .and_then(|ok| CString::new(ok).map_err(|_| Error::NulStringOpen(path.to_owned())))
 }
 
 
