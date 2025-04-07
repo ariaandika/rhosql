@@ -15,6 +15,10 @@ pub enum Error {
     ///
     /// catured from `sqlite3_errmsg()`
     Open(String),
+    /// Failure of calling `sqlite3_prepare()`
+    ///
+    /// catured from `sqlite3_errmsg()`
+    Prepare(String),
     /// Failure of calling `sqlite3_step()`
     ///
     /// catured from `sqlite3_errmsg()`
@@ -79,24 +83,27 @@ impl std::error::Error for Error { }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         macro_rules! foo {
-            ($($id:ident)* , $($tt:tt)*) => {
+            ($($id:ident)* , $($id2:pat => ($fmt:literal$($tt:tt)*)),* $(,)?) => {
                 match self {
                     $(Self::$id(e) => std::fmt::Display::fmt(e, f),)*
-                    $($tt)*
+                    $($id2 => write!(f, $fmt $($tt)*)),*
                 }
             };
         }
         foo! {
-            Open Step Code,
-            Self::NonUtf8Open(p) => write!(f, "Path is non UTF-8: {:?}", p.to_string_lossy()),
-            Self::NulStringOpen(p) => write!(f, "Path contains nul string: {:?}", p.to_string_lossy()),
-            Self::StringTooLarge => write!(f, "String too large for sqlite"),
-            Self::AlreadyClosed => write!(f, "Database already closed"),
-            Self::NonSerialized => write!(f, "Sqlite is not in Serialized mode"),
-            Self::SqliteBusy => write!(f, "SQLITE_BUSY, the database engine was unable to acquire the database locks"),
-            Self::IndexOutOfBounds => write!(f, "Row index out of bounds"),
-            Self::InvalidDataType => write!(f, "Datatype requested invalid"),
-            Self::NonUtf8Sqlite(err) => write!(f, "Sqlite returns non UTF-8 text: {err}"),
+            Code,
+            Self::Open(m) => ("Failed to open database: {m:?}"),
+            Self::Prepare(m) => ("Failed to prepare statement: {m:?}"),
+            Self::Step(m) => ("Failed to read row: {m:?}"),
+            Self::NonUtf8Open(p) => ("Path is non UTF-8: {:?}", p.to_string_lossy()),
+            Self::NulStringOpen(p) => ("Path contains nul string: {:?}", p.to_string_lossy()),
+            Self::StringTooLarge => ("String too large for sqlite"),
+            Self::AlreadyClosed => ("Database already closed"),
+            Self::NonSerialized => ("Sqlite is not in Serialized mode"),
+            Self::SqliteBusy => ("SQLITE_BUSY, the database engine was unable to acquire the database locks"),
+            Self::IndexOutOfBounds => ("Row index out of bounds"),
+            Self::InvalidDataType => ("Datatype requested invalid"),
+            Self::NonUtf8Sqlite(err) => ("Sqlite returns non UTF-8 text: {err}"),
         }
     }
 }

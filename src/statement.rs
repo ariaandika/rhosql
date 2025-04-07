@@ -1,7 +1,7 @@
 use libsqlite3_sys::{self as ffi};
 use std::{ptr, sync::Arc};
 
-use crate::{common::FfiExt, handle::SqliteHandle, row_stream::RowStream, Result};
+use crate::{common::FfiExt, handle::SqliteHandle, row_stream::RowStream, Error, Result};
 
 #[derive(Debug)]
 pub struct Statement {
@@ -18,6 +18,13 @@ impl Statement {
         let result = unsafe { ffi::sqlite3_prepare_v2(**db, zsql, nbyte, &mut stmt, &mut ptr::null()) };
 
         if result != ffi::SQLITE_OK {
+            if result == ffi::SQLITE_ERROR {
+                let msg: String = unsafe {
+                    let p = ffi::sqlite3_errmsg(**db);
+                    std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
+                };
+                return Err(Error::Prepare(msg))
+            }
             return Err(ffi::Error::new(result).into());
         }
 
