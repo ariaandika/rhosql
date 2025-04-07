@@ -1,4 +1,3 @@
-use crate::common::General;
 use libsqlite3_sys::{self as ffi};
 
 pub type Result<T,E = Error> = std::result::Result<T,E>;
@@ -15,7 +14,7 @@ pub enum Error {
     /// An English language description of the error following a failure of any of the `sqlite3_open()` routines.
     ///
     /// catured from `sqlite3_errmsg()`
-    Open(General),
+    Open(String),
     /// Sqlite Error Code
     Code(ffi::Error),
     /// string too large for sqlite (c_int::MAX)
@@ -78,7 +77,7 @@ impl std::fmt::Debug for Error {
                 }
             };
         }
-        foo! { Open Code }
+        foo! { Code }
     }
 }
 
