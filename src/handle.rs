@@ -1,59 +1,40 @@
 use libsqlite3_sys::{self as ffi};
-use std::rc::{Rc, Weak};
 
 use crate::{Error, Result};
 
-/// a wrapper to holds sqlite pointer
-///
-/// handle implement `Clone` on which create a weak reference
-///
-/// thus any database operation should check is it still open
-pub struct SqliteHandle {
+// NOTE: destructor implementation
+// 1. share Arc and only close when everything is dropped, like prepared_statement
+// 2. share Weak Arc and runtime check on Weak reference on any operation, then return error
+// for now, option 1 is used as it seems simpler
+
+#[derive(Debug, Clone)]
+pub(crate) struct SqliteHandle {
     sqlite: *mut ffi::sqlite3,
-    kind: HandleKind,
+}
+
+impl std::ops::Deref for SqliteHandle {
+    type Target = *mut ffi::sqlite3;
+
+    fn deref(&self) -> &Self::Target {
+        &self.sqlite
+    }
 }
 
 impl SqliteHandle {
-    pub fn new(sqlite: *mut ffi::sqlite3) -> Self {
-        Self { sqlite, kind: HandleKind::Strong(Rc::new(())) }
-    }
-
-    pub fn master_db(&self) -> *mut ffi::sqlite3 {
-        self.try_db().expect("(bug) weak reference should not call SqliteHandle::master_db")
-    }
-
-    pub fn try_db(&self) -> Result<*mut ffi::sqlite3> {
-        if let HandleKind::Weak(weak) = &self.kind {
-            if weak.strong_count() == 0 {
-                return Err(Error::AlreadyClosed)
-            }
+    pub fn setup(sqlite: *mut ffi::sqlite3) -> Result<Self> {
+        // https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode
+        let thread_safe = unsafe { ffi::sqlite3_threadsafe() };
+        if thread_safe != 1 {
+            return Err(Error::NonSerialized)
         }
-        Ok(self.sqlite)
+
+        Ok(Self { sqlite })
     }
 }
 
 impl Drop for SqliteHandle {
     fn drop(&mut self) {
-        // Many applications destroy their database connections using calls to sqlite3_close() at shutdown.
         unsafe { ffi::sqlite3_close(self.sqlite) };
     }
-}
-
-impl Clone for SqliteHandle {
-    fn clone(&self) -> Self {
-        let weak = match &self.kind {
-            HandleKind::Strong(rc) => Rc::downgrade(&rc),
-            HandleKind::Weak(weak) => weak.clone(),
-        };
-        Self {
-            sqlite: self.sqlite,
-            kind: HandleKind::Weak(weak),
-        }
-    }
-}
-
-enum HandleKind {
-    Strong(Rc<()>),
-    Weak(Weak<()>),
 }
 
