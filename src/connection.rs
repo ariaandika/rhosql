@@ -8,9 +8,13 @@ use std::{
 use crate::{handle::SqliteHandle, statement::Statement, Error, Result};
 
 /// database connection
+#[derive(Clone)]
 pub struct Connection {
     handle: Arc<SqliteHandle>,
 }
+
+// we checked that sqlite in Serialize mode
+unsafe impl Send for Connection { }
 
 impl Connection {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
