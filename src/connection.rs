@@ -5,10 +5,10 @@ use std::{
     ptr,
 };
 
-use crate::{common::FfiExt, Error, Result};
+use crate::{common::FfiExt, handle::SqliteHandle, Error, Result};
 
 pub struct Connection {
-    db: *mut ffi::sqlite3,
+    handle: SqliteHandle,
 }
 
 impl Connection {
@@ -49,7 +49,7 @@ impl Connection {
             }
         }
 
-        Ok(Self { db })
+        Ok(Self { handle: SqliteHandle::new(db) })
     }
 
     pub fn query(&mut self, sql: &str) -> Result<()> {
@@ -60,7 +60,10 @@ impl Connection {
 
         let (zsql,nbyte,_) = sql.as_sqlite_cstr()?;
 
-        let result = unsafe { ffi::sqlite3_prepare_v2(self.db, zsql, nbyte, &mut stmt, &mut ptr::null()) };
+        let result = unsafe {
+            ffi::sqlite3_prepare_v2(self.handle.master_db(), zsql, nbyte, &mut stmt, &mut ptr::null())
+        };
+
         if result != ffi::SQLITE_OK {
             return Err(ffi::Error::new(result).into());
         }
@@ -102,13 +105,6 @@ impl Connection {
         // All the rest is optimization and detail.
 
         Ok(())
-    }
-}
-
-impl Drop for Connection {
-    fn drop(&mut self) {
-        // Many applications destroy their database connections using calls to sqlite3_close() at shutdown.
-        unsafe { ffi::sqlite3_close(self.db) };
     }
 }
 

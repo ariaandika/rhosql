@@ -21,6 +21,8 @@ pub enum Error {
     ///
     /// this error usually returned when performing a query with rust string
     StringTooLarge,
+    /// runtime check error that database already closed
+    AlreadyClosed,
 }
 
 macro_rules! from {
@@ -63,6 +65,7 @@ impl std::fmt::Display for Error {
             Self::NonUtf8Open(p) => write!(f, "Path is non UTF-8: {:?}", p.to_string_lossy()),
             Self::NulStringOpen(p) => write!(f, "Path contains nul string: {:?}", p.to_string_lossy()),
             Self::StringTooLarge => write!(f, "String too large for sqlite"),
+            Self::AlreadyClosed => write!(f, "Database already closed"),
         }
     }
 }
