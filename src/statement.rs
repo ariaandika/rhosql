@@ -1,63 +1,75 @@
 use libsqlite3_sys::{self as ffi};
-use std::{ptr, sync::Arc};
+use std::{
+    ffi::{c_char, c_int},
+    ptr,
+    sync::Arc,
+};
 
-use crate::{common::FfiExt, handle::SqliteHandle, row_stream::RowStream, Error, Result};
+use crate::{
+    handle::{SqliteHandle, StatementHandle},
+    row_stream::RowStream,
+    Error, Result,
+};
 
+/// sql prepared statement
 #[derive(Debug)]
 pub struct Statement {
     stmt: StatementHandle,
-    db: Arc<SqliteHandle>,
 }
 
 impl Statement {
     pub(crate) fn prepare(db: Arc<SqliteHandle>, sql: &str) -> Result<Self> {
         let mut stmt = ptr::null_mut();
 
-        let (zsql,nbyte,_) = sql.as_sqlite_cstr()?;
+        let (zsql,nbyte,_) = as_sqlite_cstr(sql)?;
 
-        let result = unsafe { ffi::sqlite3_prepare_v2(**db, zsql, nbyte, &mut stmt, &mut ptr::null()) };
-
-        if result != ffi::SQLITE_OK {
-            if result == ffi::SQLITE_ERROR {
-                let msg: String = unsafe {
-                    let p = ffi::sqlite3_errmsg(**db);
-                    std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
-                };
-                return Err(Error::Prepare(msg))
-            }
-            return Err(ffi::Error::new(result).into());
-        }
+        db.prepare_v2(zsql, nbyte, &mut stmt, ptr::null_mut())?;
 
         debug_assert!(!stmt.is_null(), "we check result above");
 
-        Ok(Self { stmt: StatementHandle { stmt }, db })
+        Ok(Self { stmt: StatementHandle::new(stmt, db) })
     }
 
+    /// bind a value and start iterating row
     pub fn bind(&mut self) -> RowStream<'_> {
         RowStream::new(self)
     }
 
-    pub(crate) fn db(&self) -> *mut ffi::sqlite3 {
-        **self.db
+    // we keep it private instead of Deref so that methods from
+    // handles does not leak
+
+    pub(crate) fn db(&self) -> &SqliteHandle {
+        self.stmt.db()
+    }
+
+    pub(crate) fn stmt(&self) -> &StatementHandle {
+        &self.stmt
+    }
+
+    pub(crate) fn stmt_mut(&mut self) -> &mut StatementHandle {
+        &mut self.stmt
+    }
+
+    pub(crate) fn clear(&mut self) -> Result<()> {
+        self.stmt.reset()?;
+        self.stmt.clear_bindings()
     }
 }
 
-impl std::ops::Deref for Statement {
-    type Target = *mut ffi::sqlite3_stmt;
-
-    fn deref(&self) -> &Self::Target {
-        &self.stmt.stmt
-    }
-}
-
-#[derive(Debug)]
-struct StatementHandle {
-    stmt: *mut ffi::sqlite3_stmt,
-}
-
-impl Drop for StatementHandle {
-    fn drop(&mut self) {
-        unsafe { ffi::sqlite3_finalize(self.stmt) };
-    }
+/// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))` normally.
+///
+/// Returns error if the string is too large for sqlite. (c_int::MAX = 2147483647)
+///
+/// The `sqlite3_destructor_type` item is always `SQLITE_TRANSIENT` unless
+/// the string was empty (in which case it's `SQLITE_STATIC`, and the ptr is static).
+fn as_sqlite_cstr(me: &str) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> {
+    let len = c_int::try_from(me.len()).map_err(|_|Error::StringTooLarge)?;
+    let (ptr, dtor_info) = if len != 0 {
+        (me.as_ptr().cast::<c_char>(), ffi::SQLITE_TRANSIENT())
+    } else {
+        // Return a pointer guaranteed to live forever
+        ("".as_ptr().cast::<c_char>(), ffi::SQLITE_STATIC())
+    };
+    Ok((ptr, len, dtor_info))
 }
 

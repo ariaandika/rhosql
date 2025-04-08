@@ -1,44 +1,33 @@
-use std::ffi::CStr;
-
 use libsqlite3_sys::{self as ffi};
 
 use crate::{row_stream::RowStream, Error, Result};
 
+/// unencoded row buffer
 #[derive(Debug)]
 pub struct RowBuffer<'row,'stmt> {
-    row_stream: &'row mut RowStream<'stmt>,
+    // we cannot borrow Statement here, cus mutable reference
+    row_stream: &'row RowStream<'stmt>,
     col_count: i32,
 }
 
-impl<'row, 'stmt> RowBuffer<'row, 'stmt> {
-    pub(crate) fn new(row_stream: &'row mut RowStream<'stmt>) -> Self {
-        let col_count = unsafe { ffi::sqlite3_data_count(row_stream.stmt()) };
-        Self { row_stream, col_count }
+impl<'row,'stmt> RowBuffer<'row,'stmt> {
+    pub(crate) fn new(row_stream: &'row RowStream<'stmt>) -> Self {
+        Self { col_count: row_stream.stmt().stmt().data_count(), row_stream }
     }
 
-    pub fn try_column(&mut self, idx: i32) -> Result<ValueRef> {
+    /// try get `idx` column
+    pub fn try_column(&self, idx: i32) -> Result<ValueRef> {
         if idx >= self.col_count {
             return Err(Error::IndexOutOfBounds)
         }
 
-        let ty = unsafe { ffi::sqlite3_column_type(self.stmt(), idx) };
+        let ty = self.stmt().column_type(idx);
 
         let value = match ty {
-            ffi::SQLITE_INTEGER => ValueRef::Int(unsafe { ffi::sqlite3_column_int(self.stmt(), idx) }),
-            ffi::SQLITE_FLOAT => ValueRef::Float(unsafe { ffi::sqlite3_column_double(self.stmt(), idx) }),
-            ffi::SQLITE_TEXT => {
-                let value = unsafe {
-                    let value = ffi::sqlite3_column_text(self.stmt(), idx).cast::<std::ffi::c_char>();
-                    CStr::from_ptr(value)
-                };
-                ValueRef::Text(value.to_str().map_err(Error::NonUtf8Sqlite)?)
-            },
-            ffi::SQLITE_BLOB => {
-                let len = unsafe { ffi::sqlite3_column_bytes(self.stmt(), idx) };
-                let data = unsafe { ffi::sqlite3_column_blob(self.stmt(), idx) }.cast::<u8>();
-                let blob = unsafe { std::slice::from_raw_parts(data, len as _) };
-                ValueRef::Blob(blob)
-            }
+            ffi::SQLITE_INTEGER => ValueRef::Int(self.stmt().column_int(idx)),
+            ffi::SQLITE_FLOAT => ValueRef::Float(self.stmt().column_double(idx)),
+            ffi::SQLITE_TEXT => ValueRef::Text(self.stmt().column_text(idx)?),
+            ffi::SQLITE_BLOB => ValueRef::Blob(self.stmt().column_blob(idx)),
             ffi::SQLITE_NULL => ValueRef::Null,
             _ => unreachable!("sqlite return non datatype from `sqlite3_column_type`")
         };
@@ -46,8 +35,8 @@ impl<'row, 'stmt> RowBuffer<'row, 'stmt> {
         Ok(value)
     }
 
-    pub(crate) fn stmt(&self) -> *mut ffi::sqlite3_stmt {
-        self.row_stream.stmt()
+    fn stmt(&self) -> &crate::handle::StatementHandle {
+        self.row_stream.stmt().stmt()
     }
 }
 

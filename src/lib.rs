@@ -1,6 +1,7 @@
 
 mod common;
-mod handle;
+
+pub mod handle;
 
 pub mod connection;
 pub mod statement;
@@ -10,6 +11,7 @@ pub mod value_ref;
 pub mod error;
 
 
+pub use handle::{SqliteHandle, StatementHandle};
 pub use connection::Connection;
 pub use error::{Result, Error};
 
