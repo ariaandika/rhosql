@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     handle::{SqliteHandle, StatementHandle},
+    row_buffer::ValueRef,
     row_stream::RowStream,
     Error, Result,
 };
@@ -31,8 +32,8 @@ impl Statement {
     }
 
     /// bind a value and start iterating row
-    pub fn bind(&mut self) -> RowStream<'_> {
-        RowStream::new(self)
+    pub fn bind<'me>(&'me mut self, args: &[ValueRef]) -> Result<RowStream<'me>> {
+        RowStream::setup(self, args)
     }
 
     // we keep it private instead of Deref so that methods from

@@ -40,6 +40,42 @@ impl StatementHandle {
         &self.db
     }
 
+    pub fn finalize(self) { }
+}
+
+/// parameter encoding
+impl StatementHandle {
+    pub fn bind_int(&mut self, idx: i32, value: i32) -> Result<()> {
+        self.db.try_ok(unsafe { ffi::sqlite3_bind_int(self.stmt, idx, value) }, Error::Message)
+    }
+
+    pub fn bind_double(&mut self, idx: i32, value: f64) -> Result<()> {
+        self.db.try_ok(unsafe { ffi::sqlite3_bind_double(self.stmt, idx, value) }, Error::Message)
+    }
+
+    pub fn bind_null(&mut self, idx: i32) -> Result<()> {
+        self.db.try_ok(unsafe { ffi::sqlite3_bind_null(self.stmt, idx) }, Error::Message)
+    }
+
+    // todo: maybe choose other than SQLITE_TRANSIENT
+
+    pub fn bind_text(&mut self, idx: i32, data: *const i8, len: i32) -> Result<()> {
+        self.db.try_ok(
+            unsafe { ffi::sqlite3_bind_text(self.stmt, idx, data, len, ffi::SQLITE_TRANSIENT()) },
+            Error::Message,
+        )
+    }
+
+    pub fn bind_blob(&mut self, idx: i32, data: *const std::ffi::c_void, len: i32) -> Result<()> {
+        self.db.try_ok(
+            unsafe { ffi::sqlite3_bind_blob(self.stmt, idx, data, len, ffi::SQLITE_TRANSIENT()) },
+            Error::Message,
+        )
+    }
+}
+
+/// column decoding
+impl StatementHandle {
     pub fn data_count(&self) -> i32 {
         unsafe { ffi::sqlite3_data_count(self.stmt) }
     }
@@ -75,8 +111,6 @@ impl StatementHandle {
     pub fn column_bytes(&self, idx: i32) -> i32 {
         unsafe { ffi::sqlite3_column_bytes(self.stmt, idx) }
     }
-
-    pub fn finalize(self) { }
 }
 
 impl Drop for StatementHandle {

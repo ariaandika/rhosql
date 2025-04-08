@@ -1,7 +1,7 @@
 use libsqlite3_sys::{self as ffi};
 use std::{path::Path, sync::Arc};
 
-use crate::{handle::SqliteHandle, statement::Statement, Error, Result};
+use crate::{handle::SqliteHandle, row_buffer::ValueRef, statement::Statement, Error, Result};
 
 /// database connection
 #[derive(Clone)]
@@ -33,9 +33,9 @@ impl Connection {
     }
 
     /// execute a single statement
-    pub fn exec(&self, sql: &str) -> Result<()> {
+    pub fn exec(&self, sql: &str, args: &[ValueRef]) -> Result<()> {
         let mut stmt = self.prepare(sql)?;
-        let mut rows = stmt.bind();
+        let mut rows = stmt.bind(args)?;
         while let Some(_) = rows.next()? { }
         Ok(())
     }
