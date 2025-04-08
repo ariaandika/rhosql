@@ -24,6 +24,18 @@ pub struct SqliteHandle {
     sqlite: *mut ffi::sqlite3,
 }
 
+macro_rules! doc {
+    ($($tt:item)*) => { $(
+        #[doc = "SAFETY: Checked that sqlite compiled with SERIALIZE_MODE"]
+        #[doc = "thus synchronization is handled by sqlite"]
+        $tt
+    )* }
+}
+doc! {
+    unsafe impl Send for SqliteHandle { }
+    unsafe impl Sync for SqliteHandle { }
+}
+
 impl SqliteHandle {
     /// open a sqlite database
     ///
@@ -31,6 +43,14 @@ impl SqliteHandle {
     ///
     /// <https://sqlite.org/c3ref/open.html>
     pub fn open_v2<P: AsRef<Path>>(path: P, flags: i32) -> Result<Self> {
+        // for unsafe `Send` and `Sync` impl
+        // https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode
+        const SERIALIZE_MODE: i32 = 1;
+        let thread_safe = unsafe { ffi::sqlite3_threadsafe() };
+        if thread_safe != SERIALIZE_MODE {
+            return Err(Error::NonSerialized)
+        }
+
         let mut sqlite = ptr::null_mut();
 
         // The filename argument is interpreted as UTF-8 for `sqlite3_open_v2()`

@@ -1,7 +1,7 @@
 use libsqlite3_sys::{self as ffi};
 use std::{path::Path, sync::Arc};
 
-use crate::{handle::SqliteHandle, row_buffer::ValueRef, statement::Statement, Error, Result};
+use crate::{handle::SqliteHandle, row_buffer::ValueRef, statement::Statement, Result};
 
 /// database connection
 #[derive(Clone)]
@@ -9,19 +9,9 @@ pub struct Connection {
     handle: Arc<SqliteHandle>,
 }
 
-// we checked that sqlite in Serialize mode
-unsafe impl Send for Connection { }
-
 impl Connection {
     /// open a database connection
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        // for unsafe `Send` impl
-        // https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode
-        const SERIALIZE_MODE: i32 = 1;
-        let thread_safe = unsafe { ffi::sqlite3_threadsafe() };
-        if thread_safe != SERIALIZE_MODE {
-            return Err(Error::NonSerialized)
-        }
 
         let flags = ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE;
         let mut db = SqliteHandle::open_v2(path, flags)?;
