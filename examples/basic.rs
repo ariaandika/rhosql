@@ -13,19 +13,10 @@ fn main() -> Result<()> {
 }
 
 fn run(id: i32, db: Connection) -> Result<()> {
-    {
-        let mut stmt = db.prepare("create table if not exists foo(a,b)")?;
-        let mut row_stream = stmt.bind();
-        let _row_buffer = row_stream.next()?;
-    }
+    db.exec("create table if not exists foo(a,b)")?;
+    db.exec("insert into foo(a,b) values('deez','foo')")?;
 
-    {
-        let mut stmt = db.prepare("insert into foo(a,b) values('deez','foo')")?;
-        let mut row_stream = stmt.bind();
-        let _row_buffer = row_stream.next()?;
-    }
-
-    let mut stmt = db.prepare("select * from foo")?;
+    let mut stmt = db.prepare("select rowid,* from foo")?;
     let mut row_stream = stmt.bind();
 
     while let Some(row) = row_stream.next()? {

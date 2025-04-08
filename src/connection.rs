@@ -32,6 +32,14 @@ impl Connection {
         Ok(Self { handle: Arc::new(db) })
     }
 
+    /// execute a single statement
+    pub fn exec(&self, sql: &str) -> Result<()> {
+        let mut stmt = self.prepare(sql)?;
+        let mut rows = stmt.bind();
+        while let Some(_) = rows.next()? { }
+        Ok(())
+    }
+
     /// create a prepared statement
     pub fn prepare(&self, sql: &str) -> Result<Statement> {
         Statement::prepare(self.handle.clone(),sql)
