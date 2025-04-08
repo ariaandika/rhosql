@@ -11,6 +11,10 @@ pub enum Error {
     ///
     /// For conversion to `CString`, path should *not* contain any 0 bytes in it.
     NulStringOpen(std::path::PathBuf),
+    /// input string contains nul byte
+    ///
+    /// Sqlite string usually required to be nul terminated
+    NulString,
     /// An English language description of the error following a failure of any of the `sqlite3_open()` routines.
     ///
     /// catured from `sqlite3_errmsg()`
@@ -27,7 +31,7 @@ pub enum Error {
     Message(String),
     /// Sqlite Error Code
     Code(ffi::Error),
-    /// string too large for sqlite (c_int::MAX)
+    /// string too large for sqlite (i32::MAX)
     ///
     /// this error usually returned when performing a query with rust string
     StringTooLarge,
@@ -74,6 +78,7 @@ impl std::fmt::Display for Error {
             Message(m) => ("Failed operation: {m}"),
             AlreadyClosed => ("Database already closed"),
             SqliteBusy => ("Database engine unable to acquire locks"),
+            NulString => ("string contains nul byte"),
 
             // open error
             Open(m) => ("Failed to open database: {m}"),

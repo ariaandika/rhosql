@@ -15,12 +15,12 @@ impl<'stmt> RowStream<'stmt> {
         let iter = args.into_iter().enumerate().map(|e|(e.0 as i32 + 1,e.1));
 
         for (i,value) in iter {
-            match value {
-                ValueRef::Null => me.stmt.stmt_mut().bind_null(i as _)?,
-                ValueRef::Int(int) => me.stmt.stmt_mut().bind_int(i as _, *int)?,
-                ValueRef::Float(fl) => me.stmt.stmt_mut().bind_double(i as _, *fl)?,
-                ValueRef::Text(t) => me.stmt.stmt_mut().bind_text(i as _, t)?,
-                ValueRef::Blob(b) => me.stmt.stmt_mut().bind_blob(i as _, b)?,
+            match *value {
+                ValueRef::Null => me.stmt.stmt_mut().bind_null(i)?,
+                ValueRef::Int(int) => me.stmt.stmt_mut().bind_int(i, int)?,
+                ValueRef::Float(fl) => me.stmt.stmt_mut().bind_double(i, fl)?,
+                ValueRef::Text(t) => me.stmt.stmt_mut().bind_text(i, t)?,
+                ValueRef::Blob(b) => me.stmt.stmt_mut().bind_blob(i, b)?,
             }
         }
         Ok(me)

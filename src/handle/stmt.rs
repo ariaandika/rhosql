@@ -1,7 +1,6 @@
 use libsqlite3_sys::{self as ffi};
-use std::sync::Arc;
 
-use crate::{handle::SqliteHandle, Error, Result};
+use crate::{common::SqliteStr, handle::SqliteHandle, Error, Result};
 
 /// represent the `sqlite3_stmt` object
 ///
@@ -12,12 +11,16 @@ use crate::{handle::SqliteHandle, Error, Result};
 #[derive(Debug)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,
-    db: Arc<SqliteHandle>,
+    db: SqliteHandle,
 }
 
 impl StatementHandle {
-    pub fn new(stmt: *mut ffi::sqlite3_stmt, db: Arc<SqliteHandle>) -> Self {
+    pub(crate) fn new(stmt: *mut ffi::sqlite3_stmt, db: SqliteHandle) -> Self {
         Self { stmt, db }
+    }
+
+    pub fn db(&self) -> &SqliteHandle {
+        &self.db
     }
 
     pub fn step(&mut self) -> i32 {
@@ -30,14 +33,6 @@ impl StatementHandle {
 
     pub fn clear_bindings(&mut self) -> Result<()> {
         self.db.try_ok(unsafe { ffi::sqlite3_clear_bindings(self.stmt) }, Error::Step)
-    }
-
-    pub fn ptr(&self) -> *mut ffi::sqlite3_stmt {
-        self.stmt
-    }
-
-    pub fn db(&self) -> &SqliteHandle {
-        &self.db
     }
 
     pub fn finalize(self) { }
@@ -59,17 +54,10 @@ impl StatementHandle {
 
     // todo: maybe choose other than SQLITE_TRANSIENT
 
-    pub fn bind_text(&mut self, idx: i32, text: &str) -> Result<()> {
+    pub fn bind_text<S: SqliteStr>(&mut self, idx: i32, text: S) -> Result<()> {
+        let (ptr,len,dtor) = text.as_sqlite_str()?;
         self.db.try_ok(
-            unsafe {
-                ffi::sqlite3_bind_text(
-                    self.stmt,
-                    idx,
-                    text.as_ptr().cast(),
-                    text.len() as _,
-                    ffi::SQLITE_TRANSIENT(),
-                )
-            },
+            unsafe { ffi::sqlite3_bind_text(self.stmt, idx, ptr, len, dtor) },
             Error::Message,
         )
     }
@@ -81,7 +69,7 @@ impl StatementHandle {
                     self.stmt,
                     idx,
                     data.as_ptr().cast(),
-                    data.len() as _,
+                    i32::try_from(data.len()).unwrap_or(i32::MAX),
                     ffi::SQLITE_TRANSIENT(),
                 )
             },
@@ -111,16 +99,16 @@ impl StatementHandle {
     pub fn column_text(&self, idx: i32) -> Result<&str> {
         let text = unsafe {
             let text = ffi::sqlite3_column_text(self.stmt, idx);
-            std::ffi::CStr::from_ptr(text.cast::<std::ffi::c_char>())
+            std::ffi::CStr::from_ptr(text.cast())
         };
         text.to_str().map_err(Error::NonUtf8Sqlite)
     }
 
     pub fn column_blob(&self, idx: i32) -> &[u8] {
         unsafe {
-            let len = self.column_bytes(idx);
-            let data = { ffi::sqlite3_column_blob(self.stmt, idx) };
-            std::slice::from_raw_parts(data.cast::<u8>(), len as _)
+            let len = self.column_bytes(idx) as usize;
+            let data = ffi::sqlite3_column_blob(self.stmt, idx).cast();
+            std::slice::from_raw_parts(data, len)
         }
     }
 

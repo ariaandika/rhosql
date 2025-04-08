@@ -1,6 +1,7 @@
-use std::{ptr, sync::Arc};
+use std::ptr;
 
 use crate::{
+    common::SqliteStr,
     handle::{SqliteHandle, StatementHandle},
     row_buffer::ValueRef,
     row_stream::RowStream,
@@ -14,7 +15,7 @@ pub struct Statement {
 }
 
 impl Statement {
-    pub(crate) fn prepare(db: Arc<SqliteHandle>, sql: &str) -> Result<Self> {
+    pub(crate) fn prepare<S: SqliteStr>(db: SqliteHandle, sql: S) -> Result<Self> {
         let mut stmt = ptr::null_mut();
 
         db.prepare_v2(sql, &mut stmt, &mut ptr::null())?;

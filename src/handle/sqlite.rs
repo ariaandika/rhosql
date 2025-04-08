@@ -1,11 +1,7 @@
 use libsqlite3_sys::{self as ffi};
-use std::{
-    ffi::{CStr, CString},
-    path::Path,
-    ptr,
-};
+use std::{ffi::CStr, ptr};
 
-use crate::{Error, Result};
+use crate::{common::SqliteStr, Error, Result};
 
 // NOTE: destructor implementation
 // 1. share Arc and only close when everything is dropped, like prepared_statement
@@ -42,7 +38,7 @@ impl SqliteHandle {
     /// this is a wrapper for `sqlite3_open_v2()`
     ///
     /// <https://sqlite.org/c3ref/open.html>
-    pub fn open_v2<P: AsRef<Path>>(path: P, flags: i32) -> Result<Self> {
+    pub fn open_v2<P: SqliteStr>(path: P, flags: i32) -> Result<Self> {
         // for unsafe `Send` and `Sync` impl
         // https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode
         const SERIALIZE_MODE: i32 = 1;
@@ -53,10 +49,10 @@ impl SqliteHandle {
 
         let mut sqlite = ptr::null_mut();
 
-        // The filename argument is interpreted as UTF-8 for `sqlite3_open_v2()`
-        let c_path = path_to_cstring(path.as_ref())?;
+        // The filename argument is interpreted as UTF-8 for sqlite3_open() and sqlite3_open_v2()
+        let path = path.to_nul_string()?;
 
-        let result = unsafe { ffi::sqlite3_open_v2(c_path.as_ptr(), &mut sqlite, flags, ptr::null_mut()) };
+        let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags, ptr::null()) };
 
         if sqlite.is_null() {
             return Err(ffi::Error::new(result).into());
@@ -97,58 +93,24 @@ impl SqliteHandle {
     ///
     /// this is a wrapper for `sqlite3_prepare_v2()`
     ///
-    /// <https://sqlite.org/c3ref/prepare.html>
-    pub fn prepare_v2(
-        &self,
-        sql: &str,
-        ppstmt: &mut *mut ffi::sqlite3_stmt,
-        pztail: &mut *const i8,
-    ) -> Result<()> {
-        self.try_ok(
-            unsafe {
-                ffi::sqlite3_prepare_v2(
-                    self.sqlite,
-                    sql.as_ptr().cast(),
-                    sql.len() as _,
-                    ppstmt,
-                    pztail,
-                )
-            },
-            Error::Prepare,
-        )
-    }
-
-    /// create a prepared statement
-    ///
-    /// this is a wrapper for `sqlite3_prepare_v2()`
-    ///
-    /// the sql accepted as `Cow<CStr>` because, from the docs:
+    /// quoted from sqlite docs:
     ///
     /// > If the caller knows that the supplied string is nul-terminated, then there is a small performance
     /// > advantage to passing an nByte parameter that is the number of bytes in the input string
     /// > *including* the nul-terminator.
     ///
-    /// so if user provide `&str` an allocation is needed for the null termination
+    /// providing sql via cstr may benefit a small performance advantage
     ///
     /// <https://sqlite.org/c3ref/prepare.html>
-    pub fn prepare_v2_c(
+    pub fn prepare_v2<S: SqliteStr>(
         &self,
-        sql: &CStr,
+        sql: S,
         ppstmt: &mut *mut ffi::sqlite3_stmt,
         pztail: &mut *const i8,
     ) -> Result<()> {
+        let (ptr, len, _) = sql.as_nulstr();
         self.try_ok(
-            unsafe {
-                ffi::sqlite3_prepare_v2(
-                    self.sqlite,
-                    sql.as_ptr(),
-                    // sqlite wants *including* the nul-terminator
-                    // rust `count_bytes()` is *excluding* the nul-terminator
-                    (sql.count_bytes() + 1).try_into().unwrap(),
-                    ppstmt,
-                    pztail,
-                )
-            },
+            unsafe { ffi::sqlite3_prepare_v2(self.sqlite, ptr, len, ppstmt, pztail) },
             Error::Prepare,
         )
     }
@@ -181,20 +143,5 @@ impl Drop for SqliteHandle {
     fn drop(&mut self) {
         unsafe { ffi::sqlite3_close(self.sqlite) };
     }
-}
-
-#[cfg(unix)]
-fn path_to_cstring(path: &Path) -> Result<CString> {
-    use std::os::unix::ffi::OsStrExt;
-    CString::new(path.as_os_str().as_bytes())
-        .map_err(|_|Error::NulStringOpen(path.to_owned()))
-}
-
-/// The filename argument is interpreted as UTF-8 for `sqlite3_open_v2()`
-#[cfg(not(unix))]
-fn path_to_cstring(path: &Path) -> Result<CString> {
-    path.to_str()
-        .ok_or_else(|| Error::NonUtf8Open(path.to_owned()))
-        .and_then(|ok| CString::new(ok).map_err(|_| Error::NulStringOpen(path.to_owned())))
 }
 
