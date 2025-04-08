@@ -30,7 +30,7 @@ pub trait SqliteStr: sealed::Sealed {
     /// so its could have performance improvement querying with cstr, `c"SELECT * FROM users"`
     ///
     /// return error if string contains nul byte in the middle
-    fn to_nul_string<'q>(&'q self) -> Result<Cow<'q,CStr>>;
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>>;
 }
 
 // somehow blanket implementation doesnt work
@@ -47,7 +47,7 @@ macro_rules! ref_impl {
                 <$ty>::as_nulstr(*self)
             }
 
-            fn to_nul_string<'q>(&'q self) -> Result<Cow<'q,CStr>> {
+            fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
                 <$ty>::to_nul_string(*self)
             }
         }
@@ -78,7 +78,7 @@ impl SqliteStr for CStr {
         }
     }
 
-    fn to_nul_string<'q>(&'q self) -> Result<Cow<'q,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
         Ok(Cow::Borrowed(self))
     }
 }
@@ -107,7 +107,7 @@ impl SqliteStr for str {
         }
     }
 
-    fn to_nul_string<'q>(&'q self) -> Result<Cow<'q,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
         match CString::new(self) {
             Ok(ok) => Ok(Cow::Owned(ok)),
             _ => Err(Error::NulString),
@@ -126,7 +126,7 @@ impl SqliteStr for CString {
         self.as_c_str().as_nulstr()
     }
 
-    fn to_nul_string<'q>(&'q self) -> Result<Cow<'q,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
         self.as_c_str().to_nul_string()
     }
 }
@@ -142,7 +142,7 @@ impl SqliteStr for String {
         self.as_str().as_nulstr()
     }
 
-    fn to_nul_string<'q>(&'q self) -> Result<Cow<'q,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
         self.as_str().to_nul_string()
     }
 }

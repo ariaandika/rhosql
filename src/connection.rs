@@ -26,7 +26,7 @@ impl Connection {
     pub fn exec<S: SqliteStr>(&self, sql: S, args: &[ValueRef]) -> Result<()> {
         let mut stmt = self.prepare(sql)?;
         let mut rows = stmt.bind(args)?;
-        while let Some(_) = rows.next()? { }
+        while rows.next()?.is_some() { }
         Ok(())
     }
 

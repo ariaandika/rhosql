@@ -12,7 +12,7 @@ pub struct RowStream<'stmt> {
 impl<'stmt> RowStream<'stmt> {
     pub(crate) fn setup(stmt: &'stmt mut Statement, args: &[ValueRef]) -> Result<Self> {
         let me = Self { stmt, done: false };
-        let iter = args.into_iter().enumerate().map(|e|(e.0 as i32 + 1,e.1));
+        let iter = args.iter().enumerate().map(|e|(e.0 as i32 + 1,e.1));
 
         for (i,value) in iter {
             match *value {
