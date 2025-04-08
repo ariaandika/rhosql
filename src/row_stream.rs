@@ -19,8 +19,8 @@ impl<'stmt> RowStream<'stmt> {
                 ValueRef::Null => me.stmt.stmt_mut().bind_null(i as _)?,
                 ValueRef::Int(int) => me.stmt.stmt_mut().bind_int(i as _, *int)?,
                 ValueRef::Float(fl) => me.stmt.stmt_mut().bind_double(i as _, *fl)?,
-                ValueRef::Text(t) => me.stmt.stmt_mut().bind_text(i as _, t.as_ptr().cast(), t.len() as _)?,
-                ValueRef::Blob(b) => me.stmt.stmt_mut().bind_blob(i as _, b.as_ptr().cast(), b.len() as _)?,
+                ValueRef::Text(t) => me.stmt.stmt_mut().bind_text(i as _, t)?,
+                ValueRef::Blob(b) => me.stmt.stmt_mut().bind_blob(i as _, b)?,
             }
         }
         Ok(me)

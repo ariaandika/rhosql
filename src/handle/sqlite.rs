@@ -80,13 +80,55 @@ impl SqliteHandle {
     /// <https://sqlite.org/c3ref/prepare.html>
     pub fn prepare_v2(
         &self,
-        zsql: *const i8,
-        nbyte: i32,
-        ppstmt: *mut *mut ffi::sqlite3_stmt,
-        pztail: *mut *const i8,
+        sql: &str,
+        ppstmt: &mut *mut ffi::sqlite3_stmt,
+        pztail: &mut *const i8,
     ) -> Result<()> {
         self.try_ok(
-            unsafe { ffi::sqlite3_prepare_v2(self.sqlite, zsql, nbyte, ppstmt, pztail) },
+            unsafe {
+                ffi::sqlite3_prepare_v2(
+                    self.sqlite,
+                    sql.as_ptr().cast(),
+                    sql.len() as _,
+                    ppstmt,
+                    pztail,
+                )
+            },
+            Error::Prepare,
+        )
+    }
+
+    /// create a prepared statement
+    ///
+    /// this is a wrapper for `sqlite3_prepare_v2()`
+    ///
+    /// the sql accepted as `Cow<CStr>` because, from the docs:
+    ///
+    /// > If the caller knows that the supplied string is nul-terminated, then there is a small performance
+    /// > advantage to passing an nByte parameter that is the number of bytes in the input string
+    /// > *including* the nul-terminator.
+    ///
+    /// so if user provide `&str` an allocation is needed for the null termination
+    ///
+    /// <https://sqlite.org/c3ref/prepare.html>
+    pub fn prepare_v2_c(
+        &self,
+        sql: &CStr,
+        ppstmt: &mut *mut ffi::sqlite3_stmt,
+        pztail: &mut *const i8,
+    ) -> Result<()> {
+        self.try_ok(
+            unsafe {
+                ffi::sqlite3_prepare_v2(
+                    self.sqlite,
+                    sql.as_ptr(),
+                    // sqlite wants *including* the nul-terminator
+                    // rust `count_bytes()` is *excluding* the nul-terminator
+                    (sql.count_bytes() + 1).try_into().unwrap(),
+                    ppstmt,
+                    pztail,
+                )
+            },
             Error::Prepare,
         )
     }

@@ -59,16 +59,32 @@ impl StatementHandle {
 
     // todo: maybe choose other than SQLITE_TRANSIENT
 
-    pub fn bind_text(&mut self, idx: i32, data: *const i8, len: i32) -> Result<()> {
+    pub fn bind_text(&mut self, idx: i32, text: &str) -> Result<()> {
         self.db.try_ok(
-            unsafe { ffi::sqlite3_bind_text(self.stmt, idx, data, len, ffi::SQLITE_TRANSIENT()) },
+            unsafe {
+                ffi::sqlite3_bind_text(
+                    self.stmt,
+                    idx,
+                    text.as_ptr().cast(),
+                    text.len() as _,
+                    ffi::SQLITE_TRANSIENT(),
+                )
+            },
             Error::Message,
         )
     }
 
-    pub fn bind_blob(&mut self, idx: i32, data: *const std::ffi::c_void, len: i32) -> Result<()> {
+    pub fn bind_blob(&mut self, idx: i32, data: &[u8]) -> Result<()> {
         self.db.try_ok(
-            unsafe { ffi::sqlite3_bind_blob(self.stmt, idx, data, len, ffi::SQLITE_TRANSIENT()) },
+            unsafe {
+                ffi::sqlite3_bind_blob(
+                    self.stmt,
+                    idx,
+                    data.as_ptr().cast(),
+                    data.len() as _,
+                    ffi::SQLITE_TRANSIENT(),
+                )
+            },
             Error::Message,
         )
     }
