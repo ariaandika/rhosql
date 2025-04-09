@@ -1,7 +1,7 @@
 use libsqlite3_sys::{self as ffi};
-use std::{borrow::Cow, ffi::{c_char, c_int, CStr, CString}};
+use std::{borrow::Cow, ffi::{c_char, c_int, CStr, CString, NulError}};
 
-use crate::{Error, Result};
+use crate::{error::StringError, Result};
 
 /// Conversion between sqlite and rust string
 ///
@@ -18,19 +18,19 @@ use crate::{Error, Result};
 /// so its could have performance improvement querying with cstr, `c"SELECT * FROM users"`
 pub trait SqliteStr: sealed::Sealed {
     /// destructor string to pointer, nul terminator *excluded* length, and a sqlite destructor
-    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)>;
+    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type), StringError>;
 
     /// destructor string to pointer, maybe nul included length, and a sqlite destructor
     fn as_nulstr(&self) -> (*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type);
 
     /// make sure string is nul terminated
     ///
-    /// using CStr will avoid allocation since its already nul terminated
+    /// using `CStr` will avoid allocation since its already nul terminated
     ///
     /// so its could have performance improvement querying with cstr, `c"SELECT * FROM users"`
     ///
     /// return error if string contains nul byte in the middle
-    fn to_nul_string(&self) -> Result<Cow<'_,CStr>>;
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError>;
 }
 
 // somehow blanket implementation doesnt work
@@ -39,7 +39,7 @@ macro_rules! ref_impl {
         impl sealed::Sealed for $ty { }
         impl sealed::Sealed for &$ty { }
         impl SqliteStr for &$ty {
-            fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type)> {
+            fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type), StringError> {
                 <$ty>::as_sqlite_str(*self)
             }
 
@@ -47,7 +47,7 @@ macro_rules! ref_impl {
                 <$ty>::as_nulstr(*self)
             }
 
-            fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
+            fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError> {
                 <$ty>::to_nul_string(*self)
             }
         }
@@ -57,9 +57,9 @@ macro_rules! ref_impl {
 ref_impl!(CStr);
 
 impl SqliteStr for CStr {
-    fn as_sqlite_str(&self) -> Result<(*const c_char, i32, ffi::sqlite3_destructor_type)> {
+    fn as_sqlite_str(&self) -> Result<(*const c_char, i32, ffi::sqlite3_destructor_type), StringError> {
         let Ok(len) = c_int::try_from(self.count_bytes()) else {
-            return Err(Error::StringTooLarge);
+            return Err(StringError::TooLarge);
         };
 
         let (ptr, dtor_info) = match len {
@@ -78,7 +78,7 @@ impl SqliteStr for CStr {
         }
     }
 
-    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError> {
         Ok(Cow::Borrowed(self))
     }
 }
@@ -86,9 +86,9 @@ impl SqliteStr for CStr {
 ref_impl!(str);
 
 impl SqliteStr for str {
-    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> {
+    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type), StringError> {
         let Ok(len) = c_int::try_from(self.len()) else {
-            return Err(Error::StringTooLarge);
+            return Err(StringError::TooLarge);
         };
 
         let (ptr, dtor_info) = match len {
@@ -107,18 +107,15 @@ impl SqliteStr for str {
         }
     }
 
-    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
-        match CString::new(self) {
-            Ok(ok) => Ok(Cow::Owned(ok)),
-            _ => Err(Error::NulString),
-        }
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError> {
+        CString::new(self).map(Cow::Owned)
     }
 }
 
 ref_impl!(CString);
 
 impl SqliteStr for CString {
-    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type)> {
+    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type), StringError> {
         self.as_c_str().as_sqlite_str()
     }
 
@@ -126,7 +123,7 @@ impl SqliteStr for CString {
         self.as_c_str().as_nulstr()
     }
 
-    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError> {
         self.as_c_str().to_nul_string()
     }
 }
@@ -134,7 +131,7 @@ impl SqliteStr for CString {
 ref_impl!(String);
 
 impl SqliteStr for String {
-    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type)> {
+    fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, libsqlite3_sys::sqlite3_destructor_type), StringError> {
         self.as_str().as_sqlite_str()
     }
 
@@ -142,7 +139,7 @@ impl SqliteStr for String {
         self.as_str().as_nulstr()
     }
 
-    fn to_nul_string(&self) -> Result<Cow<'_,CStr>> {
+    fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError> {
         self.as_str().to_nul_string()
     }
 }

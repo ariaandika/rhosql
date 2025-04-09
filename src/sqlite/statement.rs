@@ -1,6 +1,11 @@
 use libsqlite3_sys::{self as ffi};
 
-use crate::{common::SqliteStr, sqlite::SqliteHandle, Error, Result};
+use crate::{
+    Result,
+    common::SqliteStr,
+    error::{BindError, DecodeError, ResetError},
+    sqlite::SqliteHandle,
+};
 
 /// represent the `sqlite3_stmt` object
 #[derive(Debug)]
@@ -22,12 +27,12 @@ impl StatementHandle {
         unsafe { ffi::sqlite3_step(self.stmt) }
     }
 
-    pub fn reset(&mut self) -> Result<()> {
-        self.db.try_ok(unsafe { ffi::sqlite3_reset(self.stmt) }, Error::Step)
+    pub fn reset(&mut self) -> Result<(), ResetError> {
+        self.db.try_result(unsafe { ffi::sqlite3_reset(self.stmt) })
     }
 
-    pub fn clear_bindings(&mut self) -> Result<()> {
-        self.db.try_ok(unsafe { ffi::sqlite3_clear_bindings(self.stmt) }, Error::Step)
+    pub fn clear_bindings(&mut self) -> Result<(), ResetError> {
+        self.db.try_result(unsafe { ffi::sqlite3_clear_bindings(self.stmt) })
     }
 
     pub fn finalize(self) { }
@@ -35,41 +40,35 @@ impl StatementHandle {
 
 /// parameter encoding
 impl StatementHandle {
-    pub fn bind_int(&mut self, idx: i32, value: i32) -> Result<()> {
-        self.db.try_ok(unsafe { ffi::sqlite3_bind_int(self.stmt, idx, value) }, Error::Message)
+    pub fn bind_int(&mut self, idx: i32, value: i32) -> Result<(), BindError> {
+        self.db.try_result(unsafe { ffi::sqlite3_bind_int(self.stmt, idx, value) })
     }
 
-    pub fn bind_double(&mut self, idx: i32, value: f64) -> Result<()> {
-        self.db.try_ok(unsafe { ffi::sqlite3_bind_double(self.stmt, idx, value) }, Error::Message)
+    pub fn bind_double(&mut self, idx: i32, value: f64) -> Result<(), BindError> {
+        self.db.try_result(unsafe { ffi::sqlite3_bind_double(self.stmt, idx, value) })
     }
 
-    pub fn bind_null(&mut self, idx: i32) -> Result<()> {
-        self.db.try_ok(unsafe { ffi::sqlite3_bind_null(self.stmt, idx) }, Error::Message)
+    pub fn bind_null(&mut self, idx: i32) -> Result<(), BindError> {
+        self.db.try_result(unsafe { ffi::sqlite3_bind_null(self.stmt, idx) })
     }
 
     // todo: maybe choose other than SQLITE_TRANSIENT
 
-    pub fn bind_text<S: SqliteStr>(&mut self, idx: i32, text: S) -> Result<()> {
-        let (ptr,len,dtor) = text.as_sqlite_str()?;
-        self.db.try_ok(
-            unsafe { ffi::sqlite3_bind_text(self.stmt, idx, ptr, len, dtor) },
-            Error::Message,
-        )
+    pub fn bind_text<S: SqliteStr>(&mut self, idx: i32, text: S) -> Result<(), BindError> {
+        let (ptr, len, dtor) = text.as_sqlite_str()?;
+        self.db.try_result(unsafe { ffi::sqlite3_bind_text(self.stmt, idx, ptr, len, dtor) })
     }
 
-    pub fn bind_blob(&mut self, idx: i32, data: &[u8]) -> Result<()> {
-        self.db.try_ok(
-            unsafe {
-                ffi::sqlite3_bind_blob(
-                    self.stmt,
-                    idx,
-                    data.as_ptr().cast(),
-                    i32::try_from(data.len()).unwrap_or(i32::MAX),
-                    ffi::SQLITE_TRANSIENT(),
-                )
-            },
-            Error::Message,
-        )
+    pub fn bind_blob(&mut self, idx: i32, data: &[u8]) -> Result<(), BindError> {
+        self.db.try_result(unsafe {
+            ffi::sqlite3_bind_blob(
+                self.stmt,
+                idx,
+                data.as_ptr().cast(),
+                i32::try_from(data.len()).unwrap_or(i32::MAX),
+                ffi::SQLITE_TRANSIENT(),
+            )
+        })
     }
 }
 
@@ -91,12 +90,12 @@ impl StatementHandle {
         unsafe { ffi::sqlite3_column_double(self.stmt, idx) }
     }
 
-    pub fn column_text(&self, idx: i32) -> Result<&str> {
+    pub fn column_text(&self, idx: i32) -> Result<&str, DecodeError> {
         let text = unsafe {
             let text = ffi::sqlite3_column_text(self.stmt, idx);
             std::ffi::CStr::from_ptr(text.cast())
         };
-        text.to_str().map_err(Error::NonUtf8Sqlite)
+        text.to_str().map_err(DecodeError::Utf8)
     }
 
     pub fn column_blob(&self, idx: i32) -> &[u8] {

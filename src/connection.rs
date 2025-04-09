@@ -1,6 +1,10 @@
 use crate::{
-    common::SqliteStr, row_buffer::ValueRef, sqlite::OpenFlag, sqlite::SqliteHandle,
-    statement::Statement, Result,
+    Result,
+    common::SqliteStr,
+    error::PrepareError,
+    row_buffer::ValueRef,
+    sqlite::{OpenFlag, SqliteHandle},
+    statement::Statement,
 };
 
 /// database connection
@@ -27,17 +31,17 @@ impl Connection {
         Ok(Self { handle })
     }
 
+    /// create a prepared statement
+    pub fn prepare<S: SqliteStr>(&self, sql: S) -> Result<Statement, PrepareError> {
+        Statement::prepare(self.handle.clone(), sql)
+    }
+
     /// execute a single statement
     pub fn exec<S: SqliteStr>(&self, sql: S, args: &[ValueRef]) -> Result<()> {
         let mut stmt = self.prepare(sql)?;
         let mut rows = stmt.bind(args)?;
         while rows.next()?.is_some() { }
         Ok(())
-    }
-
-    /// create a prepared statement
-    pub fn prepare<S: SqliteStr>(&self, sql: S) -> Result<Statement> {
-        Statement::prepare(self.handle.clone(), sql)
     }
 }
 

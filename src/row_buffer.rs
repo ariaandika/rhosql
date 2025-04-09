@@ -1,6 +1,6 @@
 use libsqlite3_sys::{self as ffi};
 
-use crate::{row_stream::RowStream, Error, Result};
+use crate::{error::DecodeError, row_stream::RowStream, Result};
 
 /// unencoded row buffer
 #[derive(Debug)]
@@ -16,9 +16,9 @@ impl<'row,'stmt> RowBuffer<'row,'stmt> {
     }
 
     /// try get `idx` column
-    pub fn try_column(&self, idx: i32) -> Result<ValueRef> {
+    pub fn try_column(&self, idx: i32) -> Result<ValueRef, DecodeError> {
         if idx >= self.col_count {
-            return Err(Error::IndexOutOfBounds)
+            return Err(DecodeError::IndexOutOfBounds)
         }
 
         let ty = self.stmt().column_type(idx);

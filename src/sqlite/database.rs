@@ -2,7 +2,10 @@ use libsqlite3_sys::{self as ffi};
 use std::{ffi::CStr, ptr, time::Duration};
 
 use super::{OpenFlag, SqliteMutexGuard, StatementHandle};
-use crate::{Error, Result, SqliteStr};
+use crate::{
+    Result, SqliteStr,
+    error::{ConfigureError, DatabaseError, OpenError, PrepareError},
+};
 
 /// represent the `sqlite3` object
 ///
@@ -32,13 +35,13 @@ impl SqliteHandle {
     /// this is a wrapper for `sqlite3_open_v2()`
     ///
     /// <https://sqlite.org/c3ref/open.html>
-    pub fn open_v2<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
+    pub fn open_v2<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self, OpenError> {
         // for unsafe `Send` and `Sync` impl
         // https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode
         const SERIALIZE_MODE: i32 = 1;
         let thread_safe = unsafe { ffi::sqlite3_threadsafe() };
         if thread_safe != SERIALIZE_MODE {
-            return Err(Error::NonSerialized)
+            Err(OpenError::NotSerializeMode)?;
         }
 
         let mut sqlite = ptr::null_mut();
@@ -49,47 +52,46 @@ impl SqliteHandle {
         let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags.0, ptr::null()) };
 
         if sqlite.is_null() {
-            return Err(ffi::Error::new(result).into());
+            Err(OpenError::from(DatabaseError::new(
+                ffi::code_to_str(result).into(),
+                result,
+            )))?;
         }
 
         let db = Self { sqlite };
-        db.try_ok(result, Error::Open)?;
+        db.try_result::<OpenError>(result)?;
 
         // for unsafe `Send` and `Sync` impl
         // If the threading mode is Single-thread or Multi-thread then this routine returns a NULL pointer.
         // https://sqlite.org/c3ref/db_mutex.html
         let mutex = unsafe { ffi::sqlite3_db_mutex(db.sqlite) };
         if mutex.is_null() {
-            return Err(Error::NonSerialized);
+            Err(OpenError::NotSerializeMode)?;
         }
 
         Ok(db)
     }
 
-    /// check if result SQLITE_OK, otherwise treat as an error
+    /// check if result `SQLITE_OK`, otherwise treat as an [`DatabaseError`]
     ///
-    /// make sure the possible non error code is only SQLITE_OK
-    pub fn try_ok(&self, result: i32, map: fn(String) -> Error) -> Result<()> {
+    /// make sure the possible non error code is only `SQLITE_OK`
+    pub fn try_result<E: From<DatabaseError>>(&self, result: i32) -> Result<(), E> {
         match result {
             ffi::SQLITE_OK => Ok(()),
-            _ => Err(self.error(result, map)),
+            _ => Err(self.db_error(result)),
         }
     }
 
     /// convert result code into [`Error`]
-    pub fn error(&self, result: i32, map: fn(String) -> Error) -> Error {
-        match result {
-            ffi::SQLITE_BUSY => Error::SqliteBusy,
-            ffi::SQLITE_MISUSE => {
-                panic!("(bug) sqlite returns SQLITE_MISUSE")
-            },
-            ffi::SQLITE_ERROR => unsafe {
-                let err = ffi::sqlite3_errmsg(self.sqlite);
-                let err = CStr::from_ptr(err).to_string_lossy().into_owned();
-                map(err)
-            },
-            _ => ffi::Error::new(result).into(),
+    pub fn db_error<E: From<DatabaseError>>(&self, result: i32) -> E {
+        if ffi::SQLITE_MISUSE == result {
+            panic!("(bug) sqlite returns SQLITE_MISUSE")
         }
+        let msg = match self.errmsg().map(Into::into) {
+            Some(msg) => msg,
+            None => ffi::code_to_str(result).into(),
+        };
+        E::from(DatabaseError::new(msg, result))
     }
 
     /// create a prepared statement
@@ -105,13 +107,12 @@ impl SqliteHandle {
     /// providing sql via cstr may benefit a small performance advantage
     ///
     /// <https://sqlite.org/c3ref/prepare.html>
-    pub fn prepare_v2<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
+    pub fn prepare_v2<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle, PrepareError> {
         let mut ppstmt = ptr::null_mut();
         let (ptr, len, _) = sql.as_nulstr();
-        self.try_ok(
-            unsafe { ffi::sqlite3_prepare_v2(self.sqlite, ptr, len, &mut ppstmt, ptr::null_mut()) },
-            Error::Prepare,
-        )?;
+        self.try_result::<PrepareError>(unsafe {
+            ffi::sqlite3_prepare_v2(self.sqlite, ptr, len, &mut ppstmt, ptr::null_mut())
+        })?;
         debug_assert!(!ppstmt.is_null(), "we check result above");
         Ok(StatementHandle::new(ppstmt, self.clone()))
     }
@@ -156,12 +157,9 @@ impl SqliteHandle {
     /// that other busy handler is cleared.
     ///
     /// this is a wrapper for `sqlite3_busy_timeout()`
-    pub fn busy_timeout(&mut self, timeout: impl Into<Duration>) -> Result<()> {
+    pub fn busy_timeout(&mut self, timeout: impl Into<Duration>) -> Result<(), ConfigureError> {
         let timeout = timeout.into().as_millis().try_into().unwrap_or(i32::MAX);
-        self.try_ok(
-            unsafe { ffi::sqlite3_busy_timeout(self.sqlite, timeout) },
-            Error::Message,
-        )
+        self.try_result(unsafe { ffi::sqlite3_busy_timeout(self.sqlite, timeout) })
     }
 
     /// enables or disables the extended result codes feature of SQLite.
@@ -169,8 +167,8 @@ impl SqliteHandle {
     /// disabled by default
     ///
     /// this is a wrapper for `sqlite3_extended_result_codes()`
-    pub fn extended_result_codes(&mut self, onoff: bool) -> Result<()> {
-        self.try_ok(unsafe { ffi::sqlite3_extended_result_codes(self.sqlite, onoff as _)}, Error::Message)
+    pub fn extended_result_codes(&mut self, onoff: bool) -> Result<(), ConfigureError> {
+        self.try_result(unsafe { ffi::sqlite3_extended_result_codes(self.sqlite, onoff as _)})
     }
 }
 

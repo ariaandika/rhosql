@@ -1,9 +1,10 @@
 use crate::{
+    Result,
     common::SqliteStr,
-    sqlite::{SqliteHandle, StatementHandle},
+    error::{BindError, PrepareError, ResetError},
     row_buffer::ValueRef,
     row_stream::RowStream,
-    Result,
+    sqlite::{SqliteHandle, StatementHandle},
 };
 
 /// sql prepared statement
@@ -13,12 +14,12 @@ pub struct Statement {
 }
 
 impl Statement {
-    pub(crate) fn prepare<S: SqliteStr>(db: SqliteHandle, sql: S) -> Result<Self> {
+    pub(crate) fn prepare<S: SqliteStr>(db: SqliteHandle, sql: S) -> Result<Self, PrepareError> {
         Ok(Self { stmt: db.prepare_v2(sql)?, })
     }
 
     /// bind a value and start iterating row
-    pub fn bind<'me>(&'me mut self, args: &[ValueRef]) -> Result<RowStream<'me>> {
+    pub fn bind<'me>(&'me mut self, args: &[ValueRef]) -> Result<RowStream<'me>, BindError> {
         RowStream::setup(self, args)
     }
 
@@ -37,7 +38,7 @@ impl Statement {
         &mut self.stmt
     }
 
-    pub(crate) fn clear(&mut self) -> Result<()> {
+    pub(crate) fn reset(&mut self) -> Result<(), ResetError> {
         self.stmt.reset()?;
         self.stmt.clear_bindings()
     }

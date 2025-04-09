@@ -1,6 +1,11 @@
 use libsqlite3_sys::{SQLITE_DONE, SQLITE_ROW};
 
-use crate::{row_buffer::{RowBuffer, ValueRef}, statement::Statement, Error, Result};
+use crate::{
+    Result,
+    error::{BindError, StepError},
+    row_buffer::{RowBuffer, ValueRef},
+    statement::Statement,
+};
 
 /// bounded [`Statement`] and ready for iteration
 #[derive(Debug)]
@@ -10,7 +15,7 @@ pub struct RowStream<'stmt> {
 }
 
 impl<'stmt> RowStream<'stmt> {
-    pub(crate) fn setup(stmt: &'stmt mut Statement, args: &[ValueRef]) -> Result<Self> {
+    pub(crate) fn setup(stmt: &'stmt mut Statement, args: &[ValueRef]) -> Result<Self, BindError> {
         let me = Self { stmt, done: false };
         let iter = args.iter().enumerate().map(|e|(e.0 as i32 + 1,e.1));
 
@@ -27,7 +32,7 @@ impl<'stmt> RowStream<'stmt> {
     }
 
     /// fetch the next row
-    pub fn next<'me>(&'me mut self) -> Result<Option<RowBuffer<'me,'stmt>>> {
+    pub fn next<'me>(&'me mut self) -> Result<Option<RowBuffer<'me,'stmt>>, StepError> {
         if self.done {
             return Ok(None);
         }
@@ -40,7 +45,7 @@ impl<'stmt> RowStream<'stmt> {
             },
             result => {
                 self.done = true;
-                return Err(self.stmt.db().error(result, Error::Step))
+                return Err(self.stmt.db().db_error(result));
             },
         }
 
@@ -54,7 +59,7 @@ impl<'stmt> RowStream<'stmt> {
 
 impl Drop for RowStream<'_> {
     fn drop(&mut self) {
-        if let Err(err) = self.stmt.clear() {
+        if let Err(err) = self.stmt.reset() {
             eprintln!("{err}");
         }
     }
