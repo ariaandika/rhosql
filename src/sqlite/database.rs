@@ -1,18 +1,14 @@
 use libsqlite3_sys::{self as ffi};
-use std::{ffi::CStr, ptr};
+use std::{ffi::CStr, ptr, time::Duration};
 
 use crate::{common::SqliteStr, sqlite::OpenFlag, Error, Result};
-
 use super::StatementHandle;
-
-// NOTE: destructor implementation
-// 1. share Arc and only close when everything is dropped, like prepared_statement
-// 2. share Weak Arc and runtime check on Weak reference on any operation, then return error
-// for now, option 1 is used as it seems simpler
 
 /// represent the `sqlite3` object
 ///
-/// [`Connection`]: crate::Connection
+/// it is required that sqlite compiled with serialized mode enabled, thus this type is `Send` and `Sync`
+///
+/// this type is `Send` and `Sync`
 #[derive(Debug, Clone)]
 pub struct SqliteHandle {
     sqlite: *mut ffi::sqlite3,
@@ -58,6 +54,15 @@ impl SqliteHandle {
 
         let db = Self { sqlite };
         db.try_ok(result, Error::Open)?;
+
+        // for unsafe `Send` and `Sync` impl
+        // If the threading mode is Single-thread or Multi-thread then this routine returns a NULL pointer.
+        // https://sqlite.org/c3ref/db_mutex.html
+        let mutex = unsafe { ffi::sqlite3_db_mutex(db.sqlite) };
+        if mutex.is_null() {
+            return Err(Error::NonSerialized);
+        }
+
         Ok(db)
     }
 
@@ -100,10 +105,7 @@ impl SqliteHandle {
     /// providing sql via cstr may benefit a small performance advantage
     ///
     /// <https://sqlite.org/c3ref/prepare.html>
-    pub fn prepare_v2<S: SqliteStr>(
-        &self,
-        sql: S,
-    ) -> Result<StatementHandle> {
+    pub fn prepare_v2<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
         let mut ppstmt = ptr::null_mut();
         let (ptr, len, _) = sql.as_nulstr();
         self.try_ok(
@@ -114,7 +116,22 @@ impl SqliteHandle {
         Ok(StatementHandle::new(ppstmt, self.clone()))
     }
 
+    /// returns the rowid of the most recent successful INSERT into a rowid table
+    /// or virtual table on database connection
+    ///
+    /// If no successful INSERTs into rowid tables have ever occurred on the database connection D,
+    /// then sqlite3_last_insert_rowid(D) returns zero.
+    ///
+    /// this is a wrapper for `sqlite3_last_insert_rowid()`
+    pub fn last_insert_rowid(&self) -> i64 {
+        unsafe { ffi::sqlite3_last_insert_rowid(self.sqlite) }
+    }
+}
+
+/// Configuration
+impl SqliteHandle {
     /// This routine sets a busy handler that sleeps for a specified amount of time when a table is locked.
+    ///
     /// The handler will sleep multiple times until at least "ms" milliseconds of sleeping have accumulated.
     /// After at least "ms" milliseconds of sleeping,
     /// the handler returns 0 which causes sqlite3_step() to return SQLITE_BUSY.
@@ -125,17 +142,63 @@ impl SqliteHandle {
     /// that other busy handler is cleared.
     ///
     /// this is a wrapper for `sqlite3_busy_timeout()`
-    pub fn busy_timeout(&mut self, ms: i32) -> Result<()> {
-        self.try_ok(unsafe { ffi::sqlite3_busy_timeout(self.sqlite, ms) }, Error::Message)
+    pub fn busy_timeout(&mut self, timeout: impl Into<Duration>) -> Result<()> {
+        let timeout = timeout.into().as_millis().try_into().unwrap_or(i32::MAX);
+        self.try_ok(
+            unsafe { ffi::sqlite3_busy_timeout(self.sqlite, timeout) },
+            Error::Message,
+        )
     }
 
     /// enables or disables the extended result codes feature of SQLite.
+    ///
     /// disabled by default
     ///
     /// this is a wrapper for `sqlite3_extended_result_codes()`
-    pub fn extended_result_codes(&mut self, onoff: i32) -> Result<()> {
-        self.try_ok(unsafe { ffi::sqlite3_extended_result_codes(self.sqlite, onoff)}, Error::Message)
+    pub fn extended_result_codes(&mut self, onoff: bool) -> Result<()> {
+        self.try_ok(unsafe { ffi::sqlite3_extended_result_codes(self.sqlite, onoff as _)}, Error::Message)
     }
+}
+
+/// Error code and Message
+impl SqliteHandle {
+    /// return recent error's English-language text that describes the error,
+    /// as either UTF-8 or UTF-16 respectively, or NULL if no error message is available
+    ///
+    /// this is a wrapper for `sqlite3_errmsg()`
+    pub fn errmsg(&self) -> Option<&str> {
+        let data = unsafe { ffi::sqlite3_errmsg(self.sqlite) };
+        if data.is_null() {
+            return None;
+        }
+        unsafe { CStr::from_ptr(data) }.to_str().ok()
+    }
+
+    /// returns English-language text that describes the result code E, as UTF-8,
+    /// or NULL if E is not an result code for which a text error message is available.
+    ///
+    /// in sqlite, this function does not require the database pointer, however, the allocation
+    /// of the message is managed by sqlite, thus we dont know the lifetime, so instead
+    /// use the database lifetime for it
+    ///
+    /// for safety, consider cloning the message immediately
+    ///
+    /// this is a wrapper for `sqlite3_errstr()`
+    pub fn errstr(&self, code: i32) -> Option<&str> {
+        let data = unsafe { ffi::sqlite3_errstr(code) };
+        if data.is_null() {
+            return None;
+        }
+        unsafe { CStr::from_ptr(data) }.to_str().ok()
+    }
+
+    /// returns extended result code for recent error
+    ///
+    /// this is a wrapper for `sqlite3_extended_errcode()`
+    pub fn extended_errcode(&self) -> i32 {
+        unsafe { ffi::sqlite3_extended_errcode(self.sqlite) }
+    }
+
 }
 
 impl Drop for SqliteHandle {

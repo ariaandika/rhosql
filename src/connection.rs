@@ -21,8 +21,8 @@ impl Connection {
     pub fn open_with<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
         let mut handle = SqliteHandle::open_v2(path, flags)?;
 
-        handle.extended_result_codes(1)?;
-        handle.busy_timeout(5000)?;
+        handle.extended_result_codes(true)?;
+        handle.busy_timeout(std::time::Duration::from_secs(5))?;
 
         Ok(Self { handle })
     }
