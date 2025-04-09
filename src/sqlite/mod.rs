@@ -5,8 +5,10 @@
 mod database;
 mod statement;
 mod open_flag;
+mod mutex;
 
 pub use database::SqliteHandle;
 pub use statement::StatementHandle;
 pub use open_flag::OpenFlag;
+pub use mutex::SqliteMutexGuard;
 

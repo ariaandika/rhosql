@@ -1,8 +1,8 @@
 use libsqlite3_sys::{self as ffi};
 use std::{ffi::CStr, ptr, time::Duration};
 
-use crate::{common::SqliteStr, sqlite::OpenFlag, Error, Result};
-use super::StatementHandle;
+use super::{OpenFlag, SqliteMutexGuard, StatementHandle};
+use crate::{Error, Result, SqliteStr};
 
 /// represent the `sqlite3` object
 ///
@@ -125,6 +125,20 @@ impl SqliteHandle {
     /// this is a wrapper for `sqlite3_last_insert_rowid()`
     pub fn last_insert_rowid(&self) -> i64 {
         unsafe { ffi::sqlite3_last_insert_rowid(self.sqlite) }
+    }
+
+    /// attempt to enter a mutex, if another thread is already within the mutex,
+    /// this call will block
+    ///
+    /// this is a wrapper for `sqlite3_last_insert_rowid()`
+    pub fn mutex_enter(&self) -> SqliteMutexGuard<'_> {
+        let lock = unsafe {
+            let lock = ffi::sqlite3_db_mutex(self.sqlite);
+            assert!(!lock.is_null(),"connection guarantee to be in serialize mode");
+            ffi::sqlite3_mutex_enter(lock);
+            lock
+        };
+        SqliteMutexGuard::new(self, lock)
     }
 }
 
