@@ -1,13 +1,8 @@
 use libsqlite3_sys::{self as ffi};
 
-use crate::{common::SqliteStr, handle::SqliteHandle, Error, Result};
+use crate::{common::SqliteStr, sqlite::SqliteHandle, Error, Result};
 
 /// represent the `sqlite3_stmt` object
-///
-/// this is low level api that mimic how sqlite api formed
-///
-/// note that if you using high level api,
-/// calling one of this function may broke the sqlite state
 #[derive(Debug)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,

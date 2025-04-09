@@ -35,7 +35,7 @@ impl<'row,'stmt> RowBuffer<'row,'stmt> {
         Ok(value)
     }
 
-    fn stmt(&self) -> &crate::handle::StatementHandle {
+    fn stmt(&self) -> &crate::sqlite::StatementHandle {
         self.row_stream.stmt().stmt()
     }
 }

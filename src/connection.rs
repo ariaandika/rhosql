@@ -1,7 +1,6 @@
-use libsqlite3_sys::{self as ffi};
-
 use crate::{
-    common::SqliteStr, handle::SqliteHandle, row_buffer::ValueRef, statement::Statement, Result,
+    common::SqliteStr, row_buffer::ValueRef, sqlite::OpenFlag, sqlite::SqliteHandle,
+    statement::Statement, Result,
 };
 
 /// database connection
@@ -11,9 +10,15 @@ pub struct Connection {
 }
 
 impl Connection {
-    /// open a database connection
+    /// open a database connection with default flag
+    ///
+    /// see [`OpenFlag`] for the default value
     pub fn open<P: SqliteStr>(path: P) -> Result<Self> {
-        let flags = ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE;
+        Self::open_with(path, <_>::default())
+    }
+
+    /// open a database connection with given flag
+    pub fn open_with<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
         let mut handle = SqliteHandle::open_v2(path, flags)?;
 
         handle.extended_result_codes(1)?;

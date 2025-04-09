@@ -1,7 +1,9 @@
 use libsqlite3_sys::{self as ffi};
 use std::{ffi::CStr, ptr};
 
-use crate::{common::SqliteStr, Error, Result};
+use crate::{common::SqliteStr, sqlite::OpenFlag, Error, Result};
+
+use super::StatementHandle;
 
 // NOTE: destructor implementation
 // 1. share Arc and only close when everything is dropped, like prepared_statement
@@ -9,10 +11,6 @@ use crate::{common::SqliteStr, Error, Result};
 // for now, option 1 is used as it seems simpler
 
 /// represent the `sqlite3` object
-///
-/// this is low level struct which mimic how sqlite3 api are formed
-///
-/// for high level api use [`Connection`]
 ///
 /// [`Connection`]: crate::Connection
 #[derive(Debug, Clone)]
@@ -38,7 +36,7 @@ impl SqliteHandle {
     /// this is a wrapper for `sqlite3_open_v2()`
     ///
     /// <https://sqlite.org/c3ref/open.html>
-    pub fn open_v2<P: SqliteStr>(path: P, flags: i32) -> Result<Self> {
+    pub fn open_v2<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
         // for unsafe `Send` and `Sync` impl
         // https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode
         const SERIALIZE_MODE: i32 = 1;
@@ -52,7 +50,7 @@ impl SqliteHandle {
         // The filename argument is interpreted as UTF-8 for sqlite3_open() and sqlite3_open_v2()
         let path = path.to_nul_string()?;
 
-        let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags, ptr::null()) };
+        let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags.0, ptr::null()) };
 
         if sqlite.is_null() {
             return Err(ffi::Error::new(result).into());
@@ -105,14 +103,15 @@ impl SqliteHandle {
     pub fn prepare_v2<S: SqliteStr>(
         &self,
         sql: S,
-        ppstmt: &mut *mut ffi::sqlite3_stmt,
-        pztail: &mut *const i8,
-    ) -> Result<()> {
+    ) -> Result<StatementHandle> {
+        let mut ppstmt = ptr::null_mut();
         let (ptr, len, _) = sql.as_nulstr();
         self.try_ok(
-            unsafe { ffi::sqlite3_prepare_v2(self.sqlite, ptr, len, ppstmt, pztail) },
+            unsafe { ffi::sqlite3_prepare_v2(self.sqlite, ptr, len, &mut ppstmt, ptr::null_mut()) },
             Error::Prepare,
-        )
+        )?;
+        debug_assert!(!ppstmt.is_null(), "we check result above");
+        Ok(StatementHandle::new(ppstmt, self.clone()))
     }
 
     /// This routine sets a busy handler that sleeps for a specified amount of time when a table is locked.

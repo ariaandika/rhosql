@@ -1,8 +1,6 @@
-use std::ptr;
-
 use crate::{
     common::SqliteStr,
-    handle::{SqliteHandle, StatementHandle},
+    sqlite::{SqliteHandle, StatementHandle},
     row_buffer::ValueRef,
     row_stream::RowStream,
     Result,
@@ -16,13 +14,7 @@ pub struct Statement {
 
 impl Statement {
     pub(crate) fn prepare<S: SqliteStr>(db: SqliteHandle, sql: S) -> Result<Self> {
-        let mut stmt = ptr::null_mut();
-
-        db.prepare_v2(sql, &mut stmt, &mut ptr::null())?;
-
-        debug_assert!(!stmt.is_null(), "we check result above");
-
-        Ok(Self { stmt: StatementHandle::new(stmt, db) })
+        Ok(Self { stmt: db.prepare_v2(sql)?, })
     }
 
     /// bind a value and start iterating row
