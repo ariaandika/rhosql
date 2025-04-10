@@ -19,7 +19,10 @@ impl Statement {
     }
 
     /// bind a value and start iterating row
-    pub fn bind<'me>(&'me mut self, args: &[ValueRef]) -> Result<RowStream<'me>, BindError> {
+    pub fn bind<'me, 'a, R: IntoIterator<Item = ValueRef<'a>>>(
+        &'me mut self,
+        args: R,
+    ) -> Result<RowStream<'me>, BindError> {
         RowStream::setup(self, args)
     }
 

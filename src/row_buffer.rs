@@ -60,3 +60,53 @@ pub enum ValueRef<'a> {
     Blob(&'a [u8]),
 }
 
+impl Clone for ValueRef<'_> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Null => Self::Null,
+            Self::Int(e) => Self::Int(*e),
+            Self::Float(e) => Self::Float(*e),
+            Self::Text(e) => Self::Text(e),
+            Self::Blob(e) => Self::Blob(e),
+        }
+    }
+}
+
+impl Copy for ValueRef<'_> { }
+
+impl<'a> From<i32> for ValueRef<'a> {
+    fn from(value: i32) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl<'a> From<f64> for ValueRef<'a> {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl<'a> From<bool> for ValueRef<'a> {
+    fn from(value: bool) -> Self {
+        Self::Int(value as _)
+    }
+}
+
+impl<'a> From<&'a str> for ValueRef<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::Text(value)
+    }
+}
+
+impl<'a> From<&'a [u8]> for ValueRef<'a> {
+    fn from(value: &'a [u8]) -> Self {
+        Self::Blob(value)
+    }
+}
+
+impl<'a> From<&ValueRef<'a>> for ValueRef<'a> {
+    fn from(value: &ValueRef<'a>) -> Self {
+        *value
+    }
+}
+

@@ -37,10 +37,14 @@ impl Connection {
     }
 
     /// execute a single statement
-    pub fn exec<S: SqliteStr>(&self, sql: S, args: &[ValueRef]) -> Result<()> {
+    pub fn exec<'a, S: SqliteStr, R: IntoIterator<Item = ValueRef<'a>>>(
+        &self,
+        sql: S,
+        args: R,
+    ) -> Result<()> {
         let mut stmt = self.prepare(sql)?;
         let mut rows = stmt.bind(args)?;
-        while rows.next()?.is_some() { }
+        while rows.next()?.is_some() {}
         Ok(())
     }
 }

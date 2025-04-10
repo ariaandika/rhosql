@@ -16,16 +16,16 @@ fn main() -> Result<()> {
 
 fn run(id: i32, db: Connection) -> Result<()> {
     // one liner
-    db.exec("create table if not exists foo(a,b)",&[])?;
+    db.exec("create table if not exists foo(a,b)",[])?;
     db.exec(
         "insert into foo(a,b) values(?1,?2)",
-        &[ValueRef::Text("deez"),ValueRef::Text("foo"),]
+        [ValueRef::Text("deez"),ValueRef::Text("foo")],
     )?;
 
 
     // verbose, high control
     let mut stmt = db.prepare("select rowid,* from foo")?;
-    let mut row_stream = stmt.bind(&[])?;
+    let mut row_stream = stmt.bind([])?;
     while let Some(row) = row_stream.next()? {
         use std::fmt::Write;
         let mut buffer = String::new();
