@@ -1,5 +1,5 @@
 use libsqlite3_sys::{self as ffi};
-use std::{ffi::CStr, ptr, time::Duration};
+use std::{ffi::CStr, ptr, sync::atomic::{AtomicUsize, Ordering}, time::Duration};
 
 use super::{OpenFlag, SqliteMutexGuard, StatementHandle};
 use crate::{
@@ -12,8 +12,9 @@ use crate::{
 /// it is required that sqlite compiled with serialized mode enabled, thus this type is `Send` and `Sync`
 ///
 /// this type is `Send` and `Sync`
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SqliteHandle {
+    counter: *mut AtomicUsize,
     sqlite: *mut ffi::sqlite3,
 }
 
@@ -58,7 +59,8 @@ impl SqliteHandle {
             )))?;
         }
 
-        let db = Self { sqlite };
+        let counter = Box::new(AtomicUsize::new(1));
+        let db = Self { counter: Box::leak(counter), sqlite };
         db.try_result::<OpenError>(result)?;
 
         // for unsafe `Send` and `Sync` impl
@@ -213,8 +215,24 @@ impl SqliteHandle {
 
 }
 
+impl Clone for SqliteHandle {
+    fn clone(&self) -> Self {
+        let counter = unsafe { (*self.counter).fetch_add(1, Ordering::Relaxed) };
+        if counter >= isize::MAX as _ {
+            std::process::abort()
+        }
+        Self {
+            counter: self.counter,
+            sqlite: self.sqlite,
+        }
+    }
+}
+
 impl Drop for SqliteHandle {
     fn drop(&mut self) {
+        if unsafe { &mut *self.counter }.fetch_sub(1, Ordering::Release) != 1 {
+            return
+        }
         unsafe { ffi::sqlite3_close(self.sqlite) };
     }
 }
