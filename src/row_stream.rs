@@ -1,7 +1,7 @@
 use crate::{
     Result,
     error::{BindError, StepError},
-    row_buffer::{RowBuffer, ValueRef},
+    row::{Row, ValueRef},
     statement::Statement,
 };
 
@@ -13,7 +13,7 @@ pub struct RowStream<'stmt> {
 }
 
 impl<'stmt> RowStream<'stmt> {
-    pub(crate) fn setup<'a, R: IntoIterator<Item = ValueRef<'a>>>(
+    pub(crate) fn setup<'input, R: IntoIterator<Item = ValueRef<'input>>>(
         stmt: &'stmt mut Statement,
         args: R,
     ) -> Result<Self, BindError> {
@@ -22,28 +22,28 @@ impl<'stmt> RowStream<'stmt> {
 
         for (i, value) in iter {
             match value {
-                ValueRef::Null => me.stmt.stmt_mut().bind_null(i)?,
-                ValueRef::Int(int) => me.stmt.stmt_mut().bind_int(i, int)?,
-                ValueRef::Float(fl) => me.stmt.stmt_mut().bind_double(i, fl)?,
-                ValueRef::Text(t) => me.stmt.stmt_mut().bind_text(i, t)?,
-                ValueRef::Blob(b) => me.stmt.stmt_mut().bind_blob(i, b)?,
+                ValueRef::Null => me.stmt.handle_mut().bind_null(i)?,
+                ValueRef::Int(int) => me.stmt.handle_mut().bind_int(i, int)?,
+                ValueRef::Float(fl) => me.stmt.handle_mut().bind_double(i, fl)?,
+                ValueRef::Text(t) => me.stmt.handle_mut().bind_text(i, t)?,
+                ValueRef::Blob(b) => me.stmt.handle_mut().bind_blob(i, b)?,
             }
         }
         Ok(me)
     }
 
     /// fetch the next row
-    pub fn next<'me>(&'me mut self) -> Result<Option<RowBuffer<'me,'stmt>>, StepError> {
+    pub fn next<'me>(&'me mut self) -> Result<Option<Row<'me,'stmt>>, StepError> {
         if self.done {
             return Ok(None);
         }
 
-        if !self.stmt.stmt_mut().step()? {
+        if !self.stmt.handle_mut().step()? {
             self.done = true;
             return Ok(None);
         }
 
-        Ok(Some(RowBuffer::new(self)))
+        Ok(Some(Row::new(self)))
     }
 
     pub(crate) fn stmt(&self) -> &Statement {

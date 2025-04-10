@@ -2,7 +2,7 @@ use crate::{
     Result,
     common::SqliteStr,
     error::{BindError, PrepareError, ResetError},
-    row_buffer::ValueRef,
+    row::ValueRef,
     row_stream::RowStream,
     sqlite::{SqliteHandle, StatementHandle},
 };
@@ -10,16 +10,16 @@ use crate::{
 /// sql prepared statement
 #[derive(Debug)]
 pub struct Statement {
-    stmt: StatementHandle,
+    handle: StatementHandle,
 }
 
 impl Statement {
     pub(crate) fn prepare<S: SqliteStr>(db: SqliteHandle, sql: S) -> Result<Self, PrepareError> {
-        Ok(Self { stmt: db.prepare_v2(sql)?, })
+        Ok(Self { handle: db.prepare_v2(sql)?, })
     }
 
     /// bind a value and start iterating row
-    pub fn bind<'me, 'a, R: IntoIterator<Item = ValueRef<'a>>>(
+    pub fn bind<'me, 'input, R: IntoIterator<Item = ValueRef<'input>>>(
         &'me mut self,
         args: R,
     ) -> Result<RowStream<'me>, BindError> {
@@ -29,17 +29,17 @@ impl Statement {
     // we keep it private instead of Deref so that methods from
     // handles does not leak
 
-    pub(crate) fn stmt(&self) -> &StatementHandle {
-        &self.stmt
+    pub(crate) fn handle(&self) -> &StatementHandle {
+        &self.handle
     }
 
-    pub(crate) fn stmt_mut(&mut self) -> &mut StatementHandle {
-        &mut self.stmt
+    pub(crate) fn handle_mut(&mut self) -> &mut StatementHandle {
+        &mut self.handle
     }
 
     pub(crate) fn reset(&mut self) -> Result<(), ResetError> {
-        self.stmt.reset()?;
-        self.stmt.clear_bindings()
+        self.handle.reset()?;
+        self.handle.clear_bindings()
     }
 }
 

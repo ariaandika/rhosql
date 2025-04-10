@@ -1,6 +1,30 @@
-use rhosql::{row_buffer::ValueRef, Connection, Result};
+use rhosql::{
+    Connection, Result,
+    from_row::FromRow,
+    row::{Row, ValueRef},
+};
 
-fn main() -> Result<()> {
+#[derive(Debug, PartialEq, Eq)]
+#[allow(unused)]
+struct User {
+    id: i32,
+    name: String,
+}
+
+impl FromRow for User {
+    fn from_row(row: Row) -> Result<Self> {
+        Ok(Self {
+            id: row.try_decode(0)?,
+            name: row.try_decode(1)?,
+        })
+    }
+}
+
+fn main() {
+    app().inspect_err(|e|eprintln!("{e}")).ok();
+}
+
+fn app() -> Result<()> {
     let db = Connection::open(":memory:")?;
     let db2 = db.clone();
     let db3 = db.clone();
@@ -16,24 +40,18 @@ fn main() -> Result<()> {
 
 fn run(id: i32, db: Connection) -> Result<()> {
     // one liner
-    db.exec("create table if not exists foo(a,b)",[])?;
+    db.exec("create table if not exists users(name)",[])?;
     db.exec(
-        "insert into foo(a,b) values(?1,?2)",
-        [ValueRef::Text("deez"),ValueRef::Text("foo")],
+        "insert into users(name) values(?1)",
+        [ValueRef::Text(&format!("john {id}"))],
     )?;
 
 
-    // verbose, high control
-    let mut stmt = db.prepare("select rowid,* from foo")?;
+    let mut stmt = db.prepare("select rowid,name from users")?;
     let mut row_stream = stmt.bind([])?;
     while let Some(row) = row_stream.next()? {
-        use std::fmt::Write;
-        let mut buffer = String::new();
-        writeln!(buffer,"--").unwrap();
-        writeln!(buffer,"{id}. {:?}",row.try_column(0)).unwrap();
-        writeln!(buffer,"{id}. {:?}",row.try_column(1)).unwrap();
-        writeln!(buffer,"{id}. {:?}",row.try_column(2)).unwrap();
-        println!("{buffer}");
+        // iterate and decode each rows
+        let _user: User = row.try_row()?;
     }
 
     Ok(())

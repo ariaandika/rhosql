@@ -2,7 +2,7 @@ use crate::{
     Result,
     common::SqliteStr,
     error::PrepareError,
-    row_buffer::ValueRef,
+    row::ValueRef,
     sqlite::{OpenFlag, SqliteHandle},
     statement::Statement,
 };
