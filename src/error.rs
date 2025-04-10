@@ -9,11 +9,7 @@ macro_rules! display_error {
         $(, #delegate $($id:ident)*)?
         $(, $($id2:pat => ($fmt:literal$($tt:tt)*)),* )? $(,)?
     ) => {
-        $(
-            if let Err(err) = write!($f, $s) {
-                return Err(err);
-            }
-        )?
+        $(write!($f, $s)?;)?
         return match $me {
             $($(Self::$id(e) => std::fmt::Display::fmt(e,$f),)*)?
             $(
