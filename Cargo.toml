@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 libsqlite3-sys = "0.32.0"
+
+[features]
+bundled = ["libsqlite3-sys/bundled"]
+
