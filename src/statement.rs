@@ -29,10 +29,6 @@ impl Statement {
     // we keep it private instead of Deref so that methods from
     // handles does not leak
 
-    pub(crate) fn db(&self) -> &SqliteHandle {
-        self.stmt.db()
-    }
-
     pub(crate) fn stmt(&self) -> &StatementHandle {
         &self.stmt
     }

@@ -1,10 +1,10 @@
 use libsqlite3_sys::{self as ffi};
 
+use super::{DataType, SqliteHandle};
 use crate::{
     Result,
     common::SqliteStr,
-    error::{BindError, DecodeError, ResetError},
-    sqlite::SqliteHandle,
+    error::{BindError, DecodeError, ResetError, StepError},
 };
 
 /// represent the `sqlite3_stmt` object
@@ -23,8 +23,12 @@ impl StatementHandle {
         &self.db
     }
 
-    pub fn step(&mut self) -> i32 {
-        unsafe { ffi::sqlite3_step(self.stmt) }
+    pub fn step(&mut self) -> Result<bool, StepError> {
+        match unsafe { ffi::sqlite3_step(self.stmt) } {
+            ffi::SQLITE_ROW => Ok(true),
+            ffi::SQLITE_DONE => Ok(false),
+            result => Err(self.db.db_error(result)),
+        }
     }
 
     pub fn reset(&mut self) -> Result<(), ResetError> {
@@ -78,8 +82,9 @@ impl StatementHandle {
         unsafe { ffi::sqlite3_data_count(self.stmt) }
     }
 
-    pub fn column_type(&self, idx: i32) -> i32 {
-        unsafe { ffi::sqlite3_column_type(self.stmt, idx) }
+    pub fn column_type(&self, idx: i32) -> DataType {
+        let code = unsafe { ffi::sqlite3_column_type(self.stmt, idx) };
+        DataType::from_code(code).expect("sqlite return non datatype from `sqlite3_column_type`")
     }
 
     pub fn column_int(&self, idx: i32) -> i32 {

@@ -1,5 +1,3 @@
-use libsqlite3_sys::{SQLITE_DONE, SQLITE_ROW};
-
 use crate::{
     Result,
     error::{BindError, StepError},
@@ -40,16 +38,9 @@ impl<'stmt> RowStream<'stmt> {
             return Ok(None);
         }
 
-        match self.stmt.stmt_mut().step() {
-            self::SQLITE_ROW => {}
-            self::SQLITE_DONE => {
-                self.done = true;
-                return Ok(None)
-            },
-            result => {
-                self.done = true;
-                return Err(self.stmt.db().db_error(result));
-            },
+        if !self.stmt.stmt_mut().step()? {
+            self.done = true;
+            return Ok(None);
         }
 
         Ok(Some(RowBuffer::new(self)))

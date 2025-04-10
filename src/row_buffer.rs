@@ -1,6 +1,4 @@
-use libsqlite3_sys::{self as ffi};
-
-use crate::{error::DecodeError, row_stream::RowStream, Result};
+use crate::{Result, error::DecodeError, row_stream::RowStream, sqlite::DataType};
 
 /// unencoded row buffer
 #[derive(Debug)]
@@ -21,15 +19,12 @@ impl<'row,'stmt> RowBuffer<'row,'stmt> {
             return Err(DecodeError::IndexOutOfBounds)
         }
 
-        let ty = self.stmt().column_type(idx);
-
-        let value = match ty {
-            ffi::SQLITE_INTEGER => ValueRef::Int(self.stmt().column_int(idx)),
-            ffi::SQLITE_FLOAT => ValueRef::Float(self.stmt().column_double(idx)),
-            ffi::SQLITE_TEXT => ValueRef::Text(self.stmt().column_text(idx)?),
-            ffi::SQLITE_BLOB => ValueRef::Blob(self.stmt().column_blob(idx)),
-            ffi::SQLITE_NULL => ValueRef::Null,
-            _ => unreachable!("sqlite return non datatype from `sqlite3_column_type`")
+        let value = match self.stmt().column_type(idx) {
+            DataType::Null => ValueRef::Null,
+            DataType::Int => ValueRef::Int(self.stmt().column_int(idx)),
+            DataType::Float => ValueRef::Float(self.stmt().column_double(idx)),
+            DataType::Text => ValueRef::Text(self.stmt().column_text(idx)?),
+            DataType::Blob => ValueRef::Blob(self.stmt().column_blob(idx)),
         };
 
         Ok(value)
@@ -37,17 +32,6 @@ impl<'row,'stmt> RowBuffer<'row,'stmt> {
 
     fn stmt(&self) -> &crate::sqlite::StatementHandle {
         self.row_stream.stmt().stmt()
-    }
-}
-
-pub trait FromColumn {
-    /// either SQLITE_INTEGER, SQLITE_FLOAT, SQLITE_TEXT, SQLITE_BLOB, or SQLITE_NULL
-    fn type_check(datatype_code: i32) -> bool;
-}
-
-impl FromColumn for &str {
-    fn type_check(datatype_code: i32) -> bool {
-        datatype_code == ffi::SQLITE3_TEXT
     }
 }
 
@@ -62,31 +46,25 @@ pub enum ValueRef<'a> {
 
 impl Clone for ValueRef<'_> {
     fn clone(&self) -> Self {
-        match self {
-            Self::Null => Self::Null,
-            Self::Int(e) => Self::Int(*e),
-            Self::Float(e) => Self::Float(*e),
-            Self::Text(e) => Self::Text(e),
-            Self::Blob(e) => Self::Blob(e),
-        }
+        *self
     }
 }
 
 impl Copy for ValueRef<'_> { }
 
-impl<'a> From<i32> for ValueRef<'a> {
+impl From<i32> for ValueRef<'_> {
     fn from(value: i32) -> Self {
         Self::Int(value)
     }
 }
 
-impl<'a> From<f64> for ValueRef<'a> {
+impl From<f64> for ValueRef<'_> {
     fn from(value: f64) -> Self {
         Self::Float(value)
     }
 }
 
-impl<'a> From<bool> for ValueRef<'a> {
+impl From<bool> for ValueRef<'_> {
     fn from(value: bool) -> Self {
         Self::Int(value as _)
     }
