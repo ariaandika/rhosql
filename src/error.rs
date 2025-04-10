@@ -1,45 +1,35 @@
 //! an error which can occur in sqlite operation
-use std::{ffi::NulError, str::Utf8Error};
-
 use libsqlite3_sys::{self as ffi};
-
-macro_rules! display {
-    (
-        $self:ident, $f:ident,
-        $(#prefix $s:literal,)?
-        $({$($id:ident),* $(,)?},)?
-        $($id2:pat => ($fmt:literal$($tt:tt)*)),* $(,)?
-    ) => {
-        $(write!($f, $s)?;)?
-        match $self {
-            $($(Self::$id(e) => std::fmt::Display::fmt(e,$f),)*)?
-            $($id2 => write!($f, $fmt $($tt)*)),*
-        }
-    };
-}
+use std::{ffi::NulError, str::Utf8Error};
 
 macro_rules! display_error {
     (@@
         $self:ident, $me:ident, $f:ident,
-        $(#prefix $s:literal,)?
-        $({$($id:ident),* $(,)?},)?
-        $($id2:pat => ($fmt:literal$($tt:tt)*)),* $(,)?
+        $(, #prefix $s:literal)?
+        $(, #delegate $($id:ident)*)?
+        $(, $($id2:pat => ($fmt:literal$($tt:tt)*)),* )? $(,)?
     ) => {
-        $(write!($f, $s)?;)?
-        match $self {
+        $(
+            if let Err(err) = write!($f, $s) {
+                return Err(err);
+            }
+        )?
+        return match $me {
             $($(Self::$id(e) => std::fmt::Display::fmt(e,$f),)*)?
-            $($id2 => write!($f, $fmt $($tt)*)),*
+            $(
+                $($id2 => write!($f, $fmt $($tt)*)),*
+            )?
         }
     };
-    (@@ $self:ident, $me:ident, $f:ident, $pat:pat => write!($($tt:tt)*)) => {{
+    (@@ $self:ident, $me:ident, $f:ident, , $pat:pat => write!($($tt:tt)*)) => {{
         let $pat = $me;
-        write!($f, $($tt)*)
+        return write!($f, $($tt)*);
     }};
-    ($self:ident, $($tt:tt)*) => {
+    ($self:ident $($tt:tt)*) => {
         impl std::error::Error for $self { }
         impl std::fmt::Display for $self {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                display_error!(@@ $self, self, f, $($tt)*)
+                display_error!(@@ $self, self, f, $($tt)*);
             }
         }
     };
@@ -64,7 +54,11 @@ macro_rules! is_busy {
 }
 
 macro_rules! from {
-    ($me:ty, $(for $to:ty => $id:ident),* $(,)? $(<$t2:ty> $id2:pat => $b2:expr),* $(,)?) => {
+    (
+        $me:ty,
+        $(for $to:ty => $id:ident),* $(,)?
+        $(<$t2:ty> $id2:pat => $b2:expr),* $(,)?
+    ) => {
         $(
             impl From<$to> for $me {
                 fn from(value: $to) -> Self {
@@ -91,7 +85,7 @@ macro_rules! opaque_error {
         #[doc = concat!("an error when failed to ",$display)]
         pub struct $me(DatabaseError);
 
-        from! { $me, <DatabaseError> err => Self(err) }
+        from!($me, <DatabaseError> err => Self(err));
 
         is_busy!($me, me => me.0.is_busy());
 
@@ -136,17 +130,12 @@ pub enum StringError {
 
 from!(StringError, for NulError => NulError);
 
-impl std::error::Error for StringError { }
-impl std::fmt::Display for StringError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        display! {
-            self, f,
-            #prefix "Failed to convert rust to sqlite string: ",
-            Self::TooLarge => ("string too large, sqlite max string is i32::MAX"),
-            Self::Utf8 => ("value is not UTF-8"),
-            Self::NulError(n) => ("nul byte found in path in {}-nth byte",n.nul_position()),
-        }
-    }
+display_error! {
+    StringError,
+    #prefix "Failed to convert rust to sqlite string: ",
+    #delegate NulError,
+    Self::TooLarge => ("string too large, sqlite max string is i32::MAX"),
+    Self::Utf8 => ("value is not UTF-8")
 }
 
 /// an error when failed to open a database connection
@@ -176,21 +165,15 @@ from! {
 
 is_busy!(OpenError, me => matches!(me,OpenError::Database(d) if d.is_busy()));
 
-impl std::error::Error for OpenError { }
-impl std::fmt::Display for OpenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        display! {
-            self, f,
-            #prefix "Failed to open a database: ",
-            { Database, String },
-            Self::NotSerializeMode => ("sqlite is not in serialize mode"),
-        }
-    }
+display_error! {
+    OpenError,
+    #prefix "Failed to open a database: ",
+    #delegate Database String,
+    Self::NotSerializeMode => ("sqlite is not in serialize mode"),
 }
 
 opaque_error!(ConfigureError, #failedto "configure database");
 opaque_error!(PrepareError, #failedto "create prepared statement");
-// opaque_error!(BindError, #failedto "bind value to parameter");
 opaque_error!(StepError, #failedto "get the next row");
 opaque_error!(ResetError, #failedto "reset or clear binding prepared statement");
 
@@ -207,15 +190,10 @@ from! {
     for DatabaseError => Database
 }
 
-impl std::error::Error for BindError { }
-impl std::fmt::Display for BindError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        display! {
-            self, f,
-            #prefix "Failed to decode value: ",
-            { String, Database },
-        }
-    }
+display_error! {
+    BindError,
+    #prefix "Failed to decode value: ",
+    #delegate String Database
 }
 
 /// an error when failed to decode value
@@ -226,19 +204,15 @@ pub enum DecodeError {
     Utf8(Utf8Error),
 }
 
-impl std::error::Error for DecodeError { }
-impl std::fmt::Display for DecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        display! {
-            self, f,
-            #prefix "Failed to decode value: ",
-            { Utf8 },
-            Self::IndexOutOfBounds => ("row index out of bounds"),
-            Self::InvalidDataType => ("datatype requested missmatch"),
-        }
-    }
+display_error! {
+    DecodeError,
+    #prefix "Failed to decode value: ",
+    #delegate Utf8,
+    Self::IndexOutOfBounds => ("row index out of bounds"),
+    Self::InvalidDataType => ("datatype requested missmatch"),
 }
 
+#[derive(Debug)]
 pub enum Error {
     /// an error when failed to open a database
     Open(OpenError),
@@ -263,27 +237,12 @@ from! {
     for PrepareError => Prepare,
     for BindError => Bind,
     for StepError => Step,
+    for DecodeError => Decode,
     for ResetError => Reset
 }
 
-impl std::error::Error for Error { }
-impl std::fmt::Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{self}\"")
-    }
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        macro_rules! foo {
-            ($($id:ident)* , $($id2:pat => ($fmt:literal$($tt:tt)*)),* $(,)?) => {
-                match self {
-                    $(Self::$id(e) => std::fmt::Display::fmt(e, f),)*
-                    $($id2 => write!(f, $fmt $($tt)*)),*
-                }
-            };
-        }
-        foo!(Open Configure Prepare Bind Step Decode Reset,)
-    }
+display_error! {
+    Error,
+    #delegate Open Configure Prepare Bind Step Decode Reset
 }
 
