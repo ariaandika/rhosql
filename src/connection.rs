@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// database connection
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Connection {
     handle: SqliteHandle,
 }
@@ -46,6 +46,17 @@ impl Connection {
         let mut rows = stmt.bind(args)?;
         while rows.next()?.is_some() {}
         Ok(())
+    }
+}
+
+/// delegated methods
+impl Connection {
+    /// returns the rowid of the most recent successful INSERT into a rowid table
+    /// or virtual table on database connection
+    ///
+    /// see also [`SqliteHandle::last_insert_rowid`]
+    pub fn last_insert_rowid(&self) -> i64 {
+        self.handle.last_insert_rowid()
     }
 }
 
