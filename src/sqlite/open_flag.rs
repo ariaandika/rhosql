@@ -1,6 +1,7 @@
 /// database open flag
 ///
 /// the default is `SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE`
+#[derive(Clone, Copy)]
 pub struct OpenFlag(pub(crate) i32);
 
 /// the default is [`OpenFlag::OPEN_READWRITE_CREATE`]

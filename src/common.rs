@@ -3,6 +3,8 @@ use std::{borrow::Cow, ffi::{c_char, c_int, CStr, CString, NulError}};
 
 use crate::{error::StringError, Result};
 
+pub(crate) mod stack;
+
 /// Conversion between sqlite and rust string
 ///
 /// Sqlite and rust string are different:
