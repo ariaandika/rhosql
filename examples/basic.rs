@@ -1,23 +1,10 @@
-use rhosql::{
-    Connection, Result,
-    from_row::FromRow,
-    row::{Row, ValueRef},
-};
+use rhosql::{Connection, FromRow, Result, row::ValueRef};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, FromRow)]
 #[allow(unused)]
 struct User {
     id: i32,
     name: String,
-}
-
-impl FromRow for User {
-    fn from_row(row: Row) -> Result<Self> {
-        Ok(Self {
-            id: row.try_decode(0)?,
-            name: row.try_decode(1)?,
-        })
-    }
 }
 
 fn main() {

@@ -13,5 +13,9 @@ pub mod error;
 
 pub use common::SqliteStr;
 pub use connection::Connection;
+pub use row::Row;
+pub use from_row::FromRow;
 pub use error::{Result, Error};
+
+pub use rhosql_macros::FromRow;
 
