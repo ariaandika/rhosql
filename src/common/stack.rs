@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::mem::{self, MaybeUninit};
 
 /// Stack allocated first in last out list

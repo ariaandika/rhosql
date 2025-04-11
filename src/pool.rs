@@ -57,7 +57,7 @@ pub struct Pool {
     /// should connection be release immediately after query
     ///
     /// default to `true`
-    is_single: bool,
+    // is_single: bool,
     path: CString,
     flags: OpenFlag,
 }
@@ -74,15 +74,17 @@ struct PoolStack {
 }
 
 impl Pool {
+    #[allow(unused)]
     pub fn setup<S: SqliteStr>(path: S) -> Result<Pool, OpenError> {
         Self::setup_with(path, <_>::default())
     }
 
+    #[allow(unused)]
     pub fn setup_with<S: SqliteStr>(path: S, flags: OpenFlag) -> Result<Pool, OpenError> {
         Ok(Pool {
             path: path.to_nul_string()?.into_owned(),
             flags,
-            is_single: true,
+            // is_single: true,
             conn: None,
             inner: Arc::new(PoolInner {
                 pool: Mutex::new(PoolStack {
@@ -94,6 +96,7 @@ impl Pool {
         })
     }
 
+    #[allow(unused)]
     fn checkout(&mut self) -> Result<&mut SqliteHandle, OpenError> {
         if self.conn.is_some() {
             return Ok(self.conn.as_mut().unwrap())
@@ -132,6 +135,7 @@ impl Pool {
         Ok(self.conn.insert(conn))
     }
 
+    #[allow(unused)]
     fn release(&mut self) {
         if self.conn.is_none() {
             return;
