@@ -8,10 +8,18 @@ use crate::{
 };
 
 /// database connection
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Connection {
     handle: SqliteHandle,
 }
+
+/// SAFETY: Checked that sqlite compiled with `SERIALIZE_MODE`
+/// thus synchronization is handled by sqlite
+unsafe impl Send for SqliteHandle{}
+
+/// SAFETY: Checked that sqlite compiled with `SERIALIZE_MODE`
+/// thus synchronization is handled by sqlite
+unsafe impl Sync for SqliteHandle{}
 
 impl Connection {
     /// open a database connection with default flag
@@ -33,7 +41,8 @@ impl Connection {
 
     /// create a prepared statement
     pub fn prepare<S: SqliteStr>(&self, sql: S) -> Result<Statement, PrepareError> {
-        Statement::prepare(self.handle.clone(), sql)
+        todo!()
+        // Statement::prepare(self.handle.clone(), sql)
     }
 
     /// execute a single statement

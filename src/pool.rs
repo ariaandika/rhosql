@@ -49,6 +49,8 @@ use crate::{
     sqlite::{OpenFlag, SqliteHandle},
 };
 
+mod shared;
+
 const MAX_POOL_SIZE: usize = 8;
 
 pub struct Pool {

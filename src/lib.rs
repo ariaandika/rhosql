@@ -1,4 +1,10 @@
 
+// modules structure
+//
+// DatabaseHandle: raw handle, safe ffi call, close db on drop
+// Connection: hold db handle, cache prepared statement
+// Pool: hold multiple Connection
+
 mod common;
 mod pool;
 

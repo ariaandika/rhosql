@@ -13,8 +13,8 @@ fn main() {
 
 fn app() -> Result<()> {
     let db = Connection::open(":memory:")?;
-    let db2 = db.clone();
-    let db3 = db.clone();
+    let db2: Connection = todo!();
+    let db3: Connection = todo!();
     let h1 = std::thread::spawn(move||run(1,db2));
     let h2 = std::thread::spawn(move||run(2,db3));
 
