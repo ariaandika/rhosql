@@ -8,8 +8,10 @@ members = ["rhosql-macros"]
 
 [dependencies]
 libsqlite3-sys = "0.32.0"
+log = { version = "0.4.27", optional = true }
 rhosql-macros = { version = "0.1.0", path = "rhosql-macros" }
 
 [features]
 bundled = ["libsqlite3-sys/bundled"]
+log = ["dep:log"]
 

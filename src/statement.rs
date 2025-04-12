@@ -1,7 +1,7 @@
+use crate::sqlite::error::{BindError, PrepareError, ResetError};
 use crate::{
     Result,
     common::SqliteStr,
-    error::{BindError, PrepareError, ResetError},
     row::ValueRef,
     row_stream::RowStream,
     sqlite::{DatabaseExt, SqliteHandle, StatementHandle},

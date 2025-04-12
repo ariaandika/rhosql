@@ -1,9 +1,17 @@
 use libsqlite3_sys::{self as ffi};
-use std::{borrow::Cow, ffi::{c_char, c_int, CStr, CString, NulError}};
+use std::{
+    borrow::Cow,
+    ffi::{CStr, CString, NulError, c_char, c_int},
+};
 
-use crate::{error::StringError, Result};
+use crate::Result;
+use crate::sqlite::error::StringError;
 
 pub(crate) mod stack;
+
+pub(crate) mod sealed {
+    pub trait Sealed {}
+}
 
 /// Conversion between sqlite and rust string
 ///
@@ -144,9 +152,5 @@ impl SqliteStr for String {
     fn to_nul_string(&self) -> Result<Cow<'_,CStr>, NulError> {
         self.as_str().to_nul_string()
     }
-}
-
-mod sealed {
-    pub trait Sealed { }
 }
 

@@ -1,11 +1,11 @@
-use std::ptr;
-
 use libsqlite3_sys::{self as ffi};
 
-use super::{DataType, DatabaseExt, SqliteHandle};
-use crate::{
-    common::SqliteStr, error::{BindError, DecodeError, PrepareError, ResetError, StepError}, Result
+use super::{
+    DataType, DatabaseError,
+    error::{BindError, DecodeError, PrepareError, ResetError, StepError},
+    database::ffi_stmt,
 };
+use crate::common::SqliteStr;
 
 /// represent the `sqlite3_stmt` object
 ///
@@ -13,7 +13,7 @@ use crate::{
 #[derive(Debug)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,
-    db: SqliteHandle,
+    db_handle: *mut ffi::sqlite3,
 }
 
 impl StatementHandle {
@@ -35,24 +35,20 @@ impl StatementHandle {
         // Ok(StatementHandle::new(ppstmt, self.clone()))
     }
 
-    pub fn db(&self) -> &SqliteHandle {
-        &self.db
-    }
-
     pub fn step(&mut self) -> Result<bool, StepError> {
         match unsafe { ffi::sqlite3_step(self.stmt) } {
             ffi::SQLITE_ROW => Ok(true),
             ffi::SQLITE_DONE => Ok(false),
-            result => Err(self.db.db_error(result)),
+            result => Err(DatabaseError::from_code(result, self.db_handle).into()),
         }
     }
 
     pub fn reset(&mut self) -> Result<(), ResetError> {
-        self.db.try_result(unsafe { ffi::sqlite3_reset(self.stmt) })
+        ffi_stmt!(sqlite3_reset(self.db_handle, self.stmt))
     }
 
     pub fn clear_bindings(&mut self) -> Result<(), ResetError> {
-        self.db.try_result(unsafe { ffi::sqlite3_clear_bindings(self.stmt) })
+        ffi_stmt!(sqlite3_clear_bindings(self.db_handle, self.stmt))
     }
 
     pub fn finalize(self) { }
@@ -61,34 +57,33 @@ impl StatementHandle {
 /// parameter encoding
 impl StatementHandle {
     pub fn bind_int(&mut self, idx: i32, value: i32) -> Result<(), BindError> {
-        self.db.try_result(unsafe { ffi::sqlite3_bind_int(self.stmt, idx, value) })
+        ffi_stmt!(sqlite3_bind_int(self.db_handle, self.stmt, idx, value))
     }
 
     pub fn bind_double(&mut self, idx: i32, value: f64) -> Result<(), BindError> {
-        self.db.try_result(unsafe { ffi::sqlite3_bind_double(self.stmt, idx, value) })
+        ffi_stmt!(sqlite3_bind_double(self.db_handle, self.stmt, idx, value))
     }
 
     pub fn bind_null(&mut self, idx: i32) -> Result<(), BindError> {
-        self.db.try_result(unsafe { ffi::sqlite3_bind_null(self.stmt, idx) })
+        ffi_stmt!(sqlite3_bind_null(self.db_handle, self.stmt, idx))
     }
 
     // todo: maybe choose other than SQLITE_TRANSIENT
 
     pub fn bind_text<S: SqliteStr>(&mut self, idx: i32, text: S) -> Result<(), BindError> {
         let (ptr, len, dtor) = text.as_sqlite_str()?;
-        self.db.try_result(unsafe { ffi::sqlite3_bind_text(self.stmt, idx, ptr, len, dtor) })
+        ffi_stmt!(sqlite3_bind_text(self.db_handle, self.stmt, idx, ptr, len, dtor))
     }
 
     pub fn bind_blob(&mut self, idx: i32, data: &[u8]) -> Result<(), BindError> {
-        self.db.try_result(unsafe {
-            ffi::sqlite3_bind_blob(
-                self.stmt,
-                idx,
-                data.as_ptr().cast(),
-                i32::try_from(data.len()).unwrap_or(i32::MAX),
-                ffi::SQLITE_TRANSIENT(),
-            )
-        })
+        ffi_stmt!(sqlite3_bind_blob(
+            self.db_handle,
+            self.stmt,
+            idx,
+            data.as_ptr().cast(),
+            i32::try_from(data.len()).unwrap_or(i32::MAX),
+            ffi::SQLITE_TRANSIENT()
+        ))
     }
 }
 
@@ -134,7 +129,10 @@ impl StatementHandle {
 
 impl Drop for StatementHandle {
     fn drop(&mut self) {
-        unsafe { ffi::sqlite3_finalize(self.stmt) };
+        if let Err(_err) = ffi_stmt!(sqlite3_finalize(self.db_handle, self.stmt) as _) {
+            #[cfg(feature = "log")]
+            log::error!("Failed to finalize prepare statement on drop: {_err}")
+        }
     }
 }
 

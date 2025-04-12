@@ -1,8 +1,8 @@
 use crate::{
     Result,
-    error::{BindError, StepError},
     row::{Row, ValueRef},
     statement::Statement,
+    sqlite::error::{BindError, StepError},
 };
 
 /// bounded [`Statement`] and ready for iteration

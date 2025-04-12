@@ -1,10 +1,12 @@
-/// database open flag
+/// Database open flag.
 ///
-/// the default is `SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE`
+/// The default is [`SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE`][OpenFlag::OPEN_READWRITE_CREATE].
+///
+/// <https://sqlite.org/c3ref/open.html>
 #[derive(Clone, Copy)]
 pub struct OpenFlag(pub(crate) i32);
 
-/// the default is [`OpenFlag::OPEN_READWRITE_CREATE`]
+/// The default is [`OpenFlag::OPEN_READWRITE_CREATE`]
 impl Default for OpenFlag {
     fn default() -> Self {
         Self::OPEN_READWRITE_CREATE

@@ -1,10 +1,5 @@
 use crate::{
-    Result,
-    common::SqliteStr,
-    error::PrepareError,
-    row::ValueRef,
-    sqlite::{DatabaseExt, OpenFlag, SqliteHandle},
-    statement::Statement,
+    common::SqliteStr, row::ValueRef, sqlite::{error::{OpenError, PrepareError}, DatabaseExt, OpenFlag, SqliteHandle}, statement::Statement, Result
 };
 
 /// database connection
@@ -15,11 +10,11 @@ pub struct Connection {
 
 /// SAFETY: Checked that sqlite compiled with `SERIALIZE_MODE`
 /// thus synchronization is handled by sqlite
-unsafe impl Send for SqliteHandle{}
+unsafe impl Send for Connection {}
 
 /// SAFETY: Checked that sqlite compiled with `SERIALIZE_MODE`
 /// thus synchronization is handled by sqlite
-unsafe impl Sync for SqliteHandle{}
+unsafe impl Sync for Connection {}
 
 impl Connection {
     /// open a database connection with default flag
@@ -31,7 +26,8 @@ impl Connection {
 
     /// open a database connection with given flag
     pub fn open_with<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
-        let mut handle = SqliteHandle::open_v2(path, flags)?;
+        let mut handle = SqliteHandle::open_v2(&path.to_nul_string().map_err(OpenError::from)?, flags)
+            .map_err(OpenError::from)?;
 
         handle.extended_result_codes(true)?;
         handle.busy_timeout(std::time::Duration::from_secs(5))?;

@@ -1,17 +1,19 @@
-//! A safe interface to sqltite ffi
+//! A safe interface to sqlite ffi.
 //!
-//! this is low level interface that mimic how sqlite3 api are formed
+//! This is low level interface, user typically does work with it directly.
 
-mod error;
-mod ffi;
+pub mod error;
 
-mod database;
-mod statement;
 mod open_flag;
+mod database;
+
+mod raii;
+mod statement;
 mod mutex;
 
-pub use ffi::{Database, DatabaseExt};
-pub use database::SqliteHandle;
+pub use error::DatabaseError;
+pub use database::{Database, DatabaseExt};
+pub use raii::SqliteHandle;
 pub use statement::StatementHandle;
 pub use open_flag::OpenFlag;
 pub use mutex::SqliteMutexGuard;

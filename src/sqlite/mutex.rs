@@ -1,6 +1,5 @@
 use libsqlite3_sys::{self as ffi};
-
-use super::SqliteHandle;
+use std::marker::PhantomData;
 
 /// represent a held mutex lock from `sqlite3_mutex_enter()`
 ///
@@ -8,13 +7,16 @@ use super::SqliteHandle;
 ///
 /// <https://sqlite.org/c3ref/mutex_alloc.html>
 pub struct SqliteMutexGuard<'a> {
-    _db: &'a SqliteHandle,
     lock: *mut ffi::sqlite3_mutex,
+    _p: PhantomData<&'a ()>,
 }
 
 impl<'a> SqliteMutexGuard<'a> {
-    pub(crate) fn new(db: &'a SqliteHandle, lock: *mut ffi::sqlite3_mutex) -> Self {
-        Self { _db: db, lock }
+    pub(crate) fn new(lock: *mut ffi::sqlite3_mutex) -> Self {
+        Self {
+            lock,
+            _p: PhantomData,
+        }
     }
 }
 
@@ -23,5 +25,4 @@ impl Drop for SqliteMutexGuard<'_> {
         unsafe { ffi::sqlite3_mutex_leave(self.lock) }
     }
 }
-
 

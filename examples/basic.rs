@@ -1,3 +1,4 @@
+#![allow(unused)]
 use rhosql::{Connection, FromRow, Result, row::ValueRef};
 
 #[derive(Debug, PartialEq, Eq, FromRow)]

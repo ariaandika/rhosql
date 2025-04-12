@@ -1,3 +1,4 @@
+#![allow(warnings)]
 
 // Connection pooling
 //
@@ -45,8 +46,7 @@ use std::{
 use crate::{
     Result, SqliteStr,
     common::stack::Stack,
-    error::OpenError,
-    sqlite::{OpenFlag, SqliteHandle},
+    sqlite::{OpenFlag, SqliteHandle, error::OpenError},
 };
 
 mod shared;
