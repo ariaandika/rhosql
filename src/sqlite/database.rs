@@ -30,10 +30,10 @@ impl SqliteHandle {
         let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags.0, ptr::null()) };
 
         if sqlite.is_null() {
-            Err(OpenError::from(DatabaseError::new(
+            Err(DatabaseError::new(
                 ffi::code_to_str(result).into(),
                 result,
-            )))?;
+            ))?;
         }
 
         let db = Self { sqlite };
@@ -52,7 +52,7 @@ impl SqliteHandle {
         }
     }
 
-    /// convert result code into [`Error`]
+    /// convert result code into [`DatabaseError`]
     pub fn db_error<E: From<DatabaseError>>(&self, result: i32) -> E {
         if ffi::SQLITE_MISUSE == result {
             panic!("(bug) sqlite returns SQLITE_MISUSE")
@@ -61,7 +61,7 @@ impl SqliteHandle {
             Some(msg) => msg,
             None => ffi::code_to_str(result).into(),
         };
-        E::from(DatabaseError::new(msg, result))
+        DatabaseError::new(msg, result).into()
     }
 
     /// create a prepared statement
@@ -160,14 +160,14 @@ impl SqliteHandle {
     /// returns English-language text that describes the result code E, as UTF-8,
     /// or NULL if E is not an result code for which a text error message is available.
     ///
-    /// in sqlite, this function does not require the database pointer, however, the allocation
-    /// of the message is managed by sqlite, thus we dont know the lifetime, so instead
-    /// use the database lifetime for it
-    ///
-    /// for safety, consider cloning the message immediately
-    ///
     /// this is a wrapper for `sqlite3_errstr()`
-    pub fn errstr(&self, code: i32) -> Option<&str> {
+    //
+    // apparantly the string is static
+    //
+    // > Return a static string that describes the kind of error specified in the argument.
+    //
+    // <https://github.com/sqlite/sqlite/blob/0aa95099f5003dc99f599ab77ac0004950b281ef/src/main.c#L1636>
+    pub fn errstr(code: i32) -> Option<&'static str> {
         let data = unsafe { ffi::sqlite3_errstr(code) };
         if data.is_null() {
             return None;
