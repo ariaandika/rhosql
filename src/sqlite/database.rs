@@ -1,11 +1,7 @@
 use libsqlite3_sys::{self as ffi};
 use std::{ffi::CStr, ptr, time::Duration};
 
-use super::{
-    DatabaseError, OpenFlag, SqliteMutexGuard, StatementHandle,
-    error::{ConfigureError, PrepareError},
-};
-use crate::SqliteStr;
+use super::{DatabaseError, OpenFlag, SqliteMutexGuard, error::ConfigureError};
 
 macro_rules! ffi_db {
     (@ $method:ident($db:expr $(, $($args:expr),*)?), $into:ty $(, $ret:expr)?) => {
@@ -19,34 +15,39 @@ macro_rules! ffi_db {
         }
     };
     ($method:ident($db:expr $(, $($args:expr),*)?) as _ $(, $ret:expr)?) => {
-        ffi_db!(@ $method($db $(, $($args),*)?), super::DatabaseError $(, $ret)?)
+        super::database::ffi_db!(@ $method($db $(, $($args),*)?), super::DatabaseError $(, $ret)?)
     };
     ($method:ident($db:expr $(, $($args:expr),*)?) $(, $ret:expr)?) => {
-        ffi_db!(@ $method($db $(, $($args),*)?), _ $(, $ret)?)
-    };
-}
-
-macro_rules! ffi_stmt {
-    (@ $method:ident($db:expr, $stmt:expr $(, $($args:expr),*)?), $into:ty $(, $ret:expr)?) => {
-        match {
-            let db = $db;
-            let result = unsafe { libsqlite3_sys::$method($stmt $(, $($args),*)?) };
-            (db,result)
-        } {
-            (_, libsqlite3_sys::SQLITE_OK) => Ok({ $($ret)? }),
-            (db, result) => Err(<$into>::from(super::DatabaseError::from_code(result, db))),
-        }
-    };
-    ($method:ident($db:expr, $stmt:expr $(, $($args:expr),*)?) as _ $(, $ret:expr)?) => {
-        ffi_stmt!(@ $method($db, $stmt $(, $($args),*)?), super::DatabaseError $(, $ret)?)
-    };
-    ($method:ident($db:expr, $stmt:expr $(, $($args:expr),*)?) $(, $ret:expr)?) => {
-        ffi_stmt!(@ $method($db, $stmt $(, $($args),*)?), _ $(, $ret)?)
+        super::database::ffi_db!(@ $method($db $(, $($args),*)?), _ $(, $ret)?)
     };
 }
 
 pub(super) use ffi_db;
-pub(super) use ffi_stmt;
+
+/// Open new sqlite database.
+///
+/// Filename should be a valid UTF-8.
+///
+/// > The filename argument is interpreted as UTF-8 for sqlite3_open() and sqlite3_open_v2()
+/// >
+/// > <https://sqlite.org/c3ref/open.html>
+pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<*mut ffi::sqlite3, DatabaseError> {
+    let mut sqlite = ptr::null_mut();
+
+    let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags.0, ptr::null()) };
+
+    if sqlite.is_null() {
+        return Err(DatabaseError {
+            message: ffi::code_to_str(result).into(),
+            code: result,
+        });
+    }
+
+    match result {
+        ffi::SQLITE_OK => Ok(sqlite),
+        _ => Err(DatabaseError::from_code(result, sqlite)),
+    }
+}
 
 /// A trait that represent [`sqlite3`][1] object.
 ///
@@ -57,63 +58,16 @@ pub trait Database {
     fn as_ptr(&self) -> *mut ffi::sqlite3;
 }
 
-/// Open new sqlite database.
-///
-/// # Errors
-///
-/// Returns `Err` if path is not UTF-8 or sqlite returns error code.
-///
-/// > The filename argument is interpreted as UTF-8 for sqlite3_open() and sqlite3_open_v2()
-///
-/// <https://sqlite.org/c3ref/open.html>
-pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<*mut ffi::sqlite3, DatabaseError> {
-    let mut sqlite = ptr::null_mut();
-
-    let result = unsafe { ffi::sqlite3_open_v2(path.as_ptr(), &mut sqlite, flags.0, ptr::null()) };
-
-    if sqlite.is_null() {
-        return Err(DatabaseError { message: ffi::code_to_str(result).into(), code: result });
-    }
-
-    match result {
-        ffi::SQLITE_OK => Ok(sqlite),
-        _ => Err(DatabaseError::from_code(result, sqlite)),
-    }
-}
-
 impl Database for *mut ffi::sqlite3 {
     fn as_ptr(&self) -> *mut ffi::sqlite3 {
         *self
     }
 }
 
+impl<T> DatabaseExt for T where T: Database { }
+
 /// Database operation.
 pub trait DatabaseExt: Database {
-    /// create a prepared statement
-    ///
-    /// this is a wrapper for `sqlite3_prepare_v2()`
-    ///
-    /// quoted from sqlite docs:
-    ///
-    /// > If the caller knows that the supplied string is nul-terminated, then there is a small performance
-    /// > advantage to passing an nByte parameter that is the number of bytes in the input string
-    /// > *including* the nul-terminator.
-    ///
-    /// providing sql via cstr may benefit a small performance advantage
-    ///
-    /// <https://sqlite.org/c3ref/prepare.html>
-    fn prepare_v2<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle, PrepareError> {
-        let mut ppstmt = ptr::null_mut();
-        let (ptr, len, _) = sql.as_nulstr();
-        if let Err(err) = ffi_db!(sqlite3_prepare_v2(self.as_ptr(), ptr, len, &mut ppstmt, ptr::null_mut())) {
-            return Err(err);
-        }
-        debug_assert!(!ppstmt.is_null(), "we check result above");
-        todo!()
-        // Ok(StatementHandle::new(ppstmt, self.clone()))
-        // StatementHandle::prepare(sql, self.as_ptr())
-    }
-
     /// returns the rowid of the most recent successful INSERT into a rowid table
     /// or virtual table on database connection
     ///
@@ -208,6 +162,4 @@ pub trait DatabaseExt: Database {
         unsafe { ffi::sqlite3_extended_errcode(self.as_ptr()) }
     }
 }
-
-impl<T> DatabaseExt for T where T: Database { }
 

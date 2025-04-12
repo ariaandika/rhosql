@@ -1,10 +1,11 @@
 use crate::sqlite::error::{BindError, PrepareError, ResetError};
+use crate::sqlite::StatementExt;
 use crate::{
     Result,
     common::SqliteStr,
     row::ValueRef,
     row_stream::RowStream,
-    sqlite::{DatabaseExt, SqliteHandle, StatementHandle},
+    sqlite::{SqliteHandle, StatementHandle},
 };
 
 /// sql prepared statement
@@ -15,7 +16,8 @@ pub struct Statement {
 
 impl Statement {
     pub(crate) fn prepare<S: SqliteStr>(db: SqliteHandle, sql: S) -> Result<Self, PrepareError> {
-        Ok(Self { handle: db.prepare_v2(sql)?, })
+        todo!()
+        // Ok(Self { handle: db.prepare_v2(sql)?, })
     }
 
     /// bind a value and start iterating row

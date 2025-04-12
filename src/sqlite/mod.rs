@@ -6,17 +6,14 @@ pub mod error;
 
 mod open_flag;
 mod database;
-
-mod raii;
 mod statement;
-mod mutex;
+mod raii;
 
 pub use error::DatabaseError;
-pub use database::{Database, DatabaseExt};
-pub use raii::SqliteHandle;
-pub use statement::StatementHandle;
 pub use open_flag::OpenFlag;
-pub use mutex::SqliteMutexGuard;
+pub use database::{Database, DatabaseExt};
+pub use statement::{Statement, StatementExt};
+pub use raii::{SqliteHandle, StatementHandle, SqliteMutexGuard};
 
 macro_rules! flags {
     ($id:ident, $($fl:ident => $name:ident),* $(,)?) => {

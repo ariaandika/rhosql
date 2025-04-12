@@ -1,8 +1,11 @@
 use crate::{
     Result,
     row::{Row, ValueRef},
+    sqlite::{
+        StatementExt,
+        error::{BindError, StepError},
+    },
     statement::Statement,
-    sqlite::error::{BindError, StepError},
 };
 
 /// bounded [`Statement`] and ready for iteration
@@ -38,6 +41,7 @@ impl<'stmt> RowStream<'stmt> {
             return Ok(None);
         }
 
+        use crate::sqlite::StatementExt;
         if !self.stmt.handle_mut().step()? {
             self.done = true;
             return Ok(None);

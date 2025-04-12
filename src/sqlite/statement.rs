@@ -1,138 +1,157 @@
 use libsqlite3_sys::{self as ffi};
+use std::ptr;
 
 use super::{
-    DataType, DatabaseError,
-    error::{BindError, DecodeError, PrepareError, ResetError, StepError},
-    database::ffi_stmt,
+    database::ffi_db, error::{BindError, DecodeError, PrepareError, ResetError, StepError}, DataType, Database, DatabaseError
 };
 use crate::common::SqliteStr;
 
-/// represent the `sqlite3_stmt` object
-///
-/// It automatically finalize the statement on drop.
-#[derive(Debug)]
-pub struct StatementHandle {
-    stmt: *mut ffi::sqlite3_stmt,
-    db_handle: *mut ffi::sqlite3,
+macro_rules! ffi_stmt {
+    (@ $method:ident($db:expr, $stmt:expr $(, $($args:expr),*)?), $into:ty $(, $ret:expr)?) => {
+        match {
+            let db = $db;
+            let result = unsafe { libsqlite3_sys::$method($stmt $(, $($args),*)?) };
+            (db,result)
+        } {
+            (_, libsqlite3_sys::SQLITE_OK) => Ok({ $($ret)? }),
+            (db, result) => Err(<$into>::from(super::DatabaseError::from_code(result, db))),
+        }
+    };
+    ($method:ident($db:expr, $stmt:expr $(, $($args:expr),*)?) as _ $(, $ret:expr)?) => {
+        super::statement::ffi_stmt!(@ $method($db, $stmt $(, $($args),*)?), super::DatabaseError $(, $ret)?)
+    };
+    ($method:ident($db:expr, $stmt:expr $(, $($args:expr),*)?) $(, $ret:expr)?) => {
+        super::statement::ffi_stmt!(@ $method($db, $stmt $(, $($args),*)?), _ $(, $ret)?)
+    };
 }
 
-impl StatementHandle {
-    // pub(crate) fn new(stmt: *mut ffi::sqlite3_stmt, db: &SqliteHandle) -> Self {
-    //     Self { stmt }
-    // }
+pub(super) use ffi_stmt;
 
-    /// Create new [`StatementHandle`]
-    ///
-    /// note that the database handle should outlive this statement struct
-    pub(crate) fn prepare<S: SqliteStr>(sql: S, db: *mut ffi::sqlite3) -> Result<Self, PrepareError> {
-        // let mut ppstmt = ptr::null_mut();
-        // let (ptr, len, _) = sql.as_nulstr();
-        // self.try_result::<PrepareError>(unsafe {
-        //     ffi::sqlite3_prepare_v2(db, ptr, len, &mut ppstmt, ptr::null_mut())
-        // })?;
-        // debug_assert!(!ppstmt.is_null(), "we check result above");
-        todo!()
-        // Ok(StatementHandle::new(ppstmt, self.clone()))
+/// Create a prepared statement.
+///
+/// this is a wrapper for `sqlite3_prepare_v2()`
+///
+/// quoted from sqlite docs:
+///
+/// > If the caller knows that the supplied string is nul-terminated, then there is a small performance
+/// > advantage to passing an nByte parameter that is the number of bytes in the input string
+/// > *including* the nul-terminator.
+///
+/// providing sql via cstr may benefit a small performance advantage
+///
+/// <https://sqlite.org/c3ref/prepare.html>
+pub fn prepare_v2<S: SqliteStr>(db: *mut ffi::sqlite3, sql: S) -> Result<*mut ffi::sqlite3_stmt, PrepareError> {
+    let mut stmt = ptr::null_mut();
+    let (ptr, len, _) = sql.as_nulstr();
+    match ffi_db!(sqlite3_prepare_v2(db, ptr, len, &mut stmt, ptr::null_mut())) {
+        Ok(()) => Ok(stmt),
+        Err(err) => Err(err),
     }
+}
 
-    pub fn step(&mut self) -> Result<bool, StepError> {
-        match unsafe { ffi::sqlite3_step(self.stmt) } {
+/// A trait that represent [`sqlite3_stmt`][1] object.
+///
+/// Statement operation provided by [`StatementExt`].
+///
+/// [1]: <https://sqlite.org/c3ref/sqlite3_stmt.html>
+pub trait Statement {
+    fn as_stmt_ptr(&self) -> *mut ffi::sqlite3_stmt;
+}
+
+impl Statement for *mut ffi::sqlite3_stmt {
+    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+        *self
+    }
+}
+
+impl<T> StatementExt for T where T: Statement + Database { }
+
+pub trait StatementExt: Statement + Database {
+    fn step(&mut self) -> Result<bool, StepError> {
+        match unsafe { ffi::sqlite3_step(self.as_stmt_ptr()) } {
             ffi::SQLITE_ROW => Ok(true),
             ffi::SQLITE_DONE => Ok(false),
-            result => Err(DatabaseError::from_code(result, self.db_handle).into()),
+            result => Err(DatabaseError::from_code(result, self.as_ptr()).into()),
         }
     }
 
-    pub fn reset(&mut self) -> Result<(), ResetError> {
-        ffi_stmt!(sqlite3_reset(self.db_handle, self.stmt))
+    fn reset(&mut self) -> Result<(), ResetError> {
+        ffi_stmt!(sqlite3_reset(self.as_ptr(), self.as_stmt_ptr()))
     }
 
-    pub fn clear_bindings(&mut self) -> Result<(), ResetError> {
-        ffi_stmt!(sqlite3_clear_bindings(self.db_handle, self.stmt))
+    fn clear_bindings(&mut self) -> Result<(), ResetError> {
+        ffi_stmt!(sqlite3_clear_bindings(self.as_ptr(), self.as_stmt_ptr()))
     }
 
-    pub fn finalize(self) { }
-}
+    // NOTE: parameter encoding
 
-/// parameter encoding
-impl StatementHandle {
-    pub fn bind_int(&mut self, idx: i32, value: i32) -> Result<(), BindError> {
-        ffi_stmt!(sqlite3_bind_int(self.db_handle, self.stmt, idx, value))
+    fn bind_int(&self, idx: i32, value: i32) -> Result<(), BindError> {
+        ffi_stmt!(sqlite3_bind_int(self.as_ptr(), self.as_stmt_ptr(), idx, value))
     }
 
-    pub fn bind_double(&mut self, idx: i32, value: f64) -> Result<(), BindError> {
-        ffi_stmt!(sqlite3_bind_double(self.db_handle, self.stmt, idx, value))
+    fn bind_double(&self, idx: i32, value: f64) -> Result<(), BindError> {
+        ffi_stmt!(sqlite3_bind_double(self.as_ptr(), self.as_stmt_ptr(), idx, value))
     }
 
-    pub fn bind_null(&mut self, idx: i32) -> Result<(), BindError> {
-        ffi_stmt!(sqlite3_bind_null(self.db_handle, self.stmt, idx))
+    fn bind_null(&self, idx: i32) -> Result<(), BindError> {
+        ffi_stmt!(sqlite3_bind_null(self.as_ptr(), self.as_stmt_ptr(), idx))
     }
 
     // todo: maybe choose other than SQLITE_TRANSIENT
 
-    pub fn bind_text<S: SqliteStr>(&mut self, idx: i32, text: S) -> Result<(), BindError> {
+    fn bind_text<S: SqliteStr>(&self, idx: i32, text: S) -> Result<(), BindError> {
         let (ptr, len, dtor) = text.as_sqlite_str()?;
-        ffi_stmt!(sqlite3_bind_text(self.db_handle, self.stmt, idx, ptr, len, dtor))
+        ffi_stmt!(sqlite3_bind_text(self.as_ptr(), self.as_stmt_ptr(), idx, ptr, len, dtor))
     }
 
-    pub fn bind_blob(&mut self, idx: i32, data: &[u8]) -> Result<(), BindError> {
+    fn bind_blob(&self, idx: i32, data: &[u8]) -> Result<(), BindError> {
         ffi_stmt!(sqlite3_bind_blob(
-            self.db_handle,
-            self.stmt,
+            self.as_ptr(),
+            self.as_stmt_ptr(),
             idx,
             data.as_ptr().cast(),
             i32::try_from(data.len()).unwrap_or(i32::MAX),
             ffi::SQLITE_TRANSIENT()
         ))
     }
-}
 
-/// column decoding
-impl StatementHandle {
-    pub fn data_count(&self) -> i32 {
-        unsafe { ffi::sqlite3_data_count(self.stmt) }
+    // NOTE: column decoding
+
+    fn data_count(&self) -> i32 {
+        unsafe { ffi::sqlite3_data_count(self.as_stmt_ptr()) }
     }
 
-    pub fn column_type(&self, idx: i32) -> DataType {
-        let code = unsafe { ffi::sqlite3_column_type(self.stmt, idx) };
+    fn column_type(&self, idx: i32) -> DataType {
+        let code = unsafe { ffi::sqlite3_column_type(self.as_stmt_ptr(), idx) };
         DataType::from_code(code).expect("sqlite return non datatype from `sqlite3_column_type`")
     }
 
-    pub fn column_int(&self, idx: i32) -> i32 {
-        unsafe { ffi::sqlite3_column_int(self.stmt, idx) }
+    fn column_int(&self, idx: i32) -> i32 {
+        unsafe { ffi::sqlite3_column_int(self.as_stmt_ptr(), idx) }
     }
 
-    pub fn column_double(&self, idx: i32) -> f64 {
-        unsafe { ffi::sqlite3_column_double(self.stmt, idx) }
+    fn column_double(&self, idx: i32) -> f64 {
+        unsafe { ffi::sqlite3_column_double(self.as_stmt_ptr(), idx) }
     }
 
-    pub fn column_text(&self, idx: i32) -> Result<&str, DecodeError> {
+    fn column_text(&self, idx: i32) -> Result<&str, DecodeError> {
         let text = unsafe {
-            let text = ffi::sqlite3_column_text(self.stmt, idx);
+            let text = ffi::sqlite3_column_text(self.as_stmt_ptr(), idx);
             std::ffi::CStr::from_ptr(text.cast())
         };
         text.to_str().map_err(DecodeError::Utf8)
     }
 
-    pub fn column_blob(&self, idx: i32) -> &[u8] {
+    fn column_blob(&self, idx: i32) -> &[u8] {
         unsafe {
             let len = self.column_bytes(idx) as usize;
-            let data = ffi::sqlite3_column_blob(self.stmt, idx).cast();
+            let data = ffi::sqlite3_column_blob(self.as_stmt_ptr(), idx).cast();
             std::slice::from_raw_parts(data, len)
         }
     }
 
-    pub fn column_bytes(&self, idx: i32) -> i32 {
-        unsafe { ffi::sqlite3_column_bytes(self.stmt, idx) }
-    }
-}
-
-impl Drop for StatementHandle {
-    fn drop(&mut self) {
-        if let Err(_err) = ffi_stmt!(sqlite3_finalize(self.db_handle, self.stmt) as _) {
-            #[cfg(feature = "log")]
-            log::error!("Failed to finalize prepare statement on drop: {_err}")
-        }
+    fn column_bytes(&self, idx: i32) -> i32 {
+        unsafe { ffi::sqlite3_column_bytes(self.as_stmt_ptr(), idx) }
     }
 }
 

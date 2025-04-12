@@ -1,4 +1,9 @@
-use crate::{from_row::FromRow, row_stream::RowStream, sqlite::{error::DecodeError, DataType}, Result};
+use crate::{
+    Result,
+    from_row::FromRow,
+    row_stream::RowStream,
+    sqlite::{DataType, StatementExt, error::DecodeError},
+};
 
 /// unencoded row buffer
 #[derive(Debug)]
