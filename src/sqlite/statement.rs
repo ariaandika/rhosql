@@ -1,13 +1,15 @@
+use std::ptr;
+
 use libsqlite3_sys::{self as ffi};
 
-use super::{DataType, SqliteHandle};
+use super::{DataType, DatabaseExt, SqliteHandle};
 use crate::{
-    Result,
-    common::SqliteStr,
-    error::{BindError, DecodeError, ResetError, StepError},
+    common::SqliteStr, error::{BindError, DecodeError, PrepareError, ResetError, StepError}, Result
 };
 
 /// represent the `sqlite3_stmt` object
+///
+/// It automatically finalize the statement on drop.
 #[derive(Debug)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,
@@ -15,8 +17,22 @@ pub struct StatementHandle {
 }
 
 impl StatementHandle {
-    pub(crate) fn new(stmt: *mut ffi::sqlite3_stmt, db: SqliteHandle) -> Self {
-        Self { stmt, db }
+    // pub(crate) fn new(stmt: *mut ffi::sqlite3_stmt, db: &SqliteHandle) -> Self {
+    //     Self { stmt }
+    // }
+
+    /// Create new [`StatementHandle`]
+    ///
+    /// note that the database handle should outlive this statement struct
+    pub(crate) fn prepare<S: SqliteStr>(sql: S, db: *mut ffi::sqlite3) -> Result<Self, PrepareError> {
+        // let mut ppstmt = ptr::null_mut();
+        // let (ptr, len, _) = sql.as_nulstr();
+        // self.try_result::<PrepareError>(unsafe {
+        //     ffi::sqlite3_prepare_v2(db, ptr, len, &mut ppstmt, ptr::null_mut())
+        // })?;
+        // debug_assert!(!ppstmt.is_null(), "we check result above");
+        todo!()
+        // Ok(StatementHandle::new(ppstmt, self.clone()))
     }
 
     pub fn db(&self) -> &SqliteHandle {

@@ -4,7 +4,7 @@ use crate::{
     error::{BindError, PrepareError, ResetError},
     row::ValueRef,
     row_stream::RowStream,
-    sqlite::{SqliteHandle, StatementHandle},
+    sqlite::{DatabaseExt, SqliteHandle, StatementHandle},
 };
 
 /// sql prepared statement

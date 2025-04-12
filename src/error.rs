@@ -58,7 +58,7 @@ macro_rules! from {
         $(
             impl From<$to> for $me {
                 fn from(value: $to) -> Self {
-                    Self::$id(value)
+                    Self::$id(value.into())
                 }
             }
         )*
@@ -119,19 +119,22 @@ pub enum StringError {
     /// string too large, sqlite max string is i32::MAX
     TooLarge,
     /// value is not UTF-8
-    Utf8,
+    Utf8(Utf8Error),
     /// the supplied bytes contain an internal 0 byte
     NulError(NulError),
 }
 
-from!(StringError, for NulError => NulError);
+from! {
+    StringError,
+    for NulError => NulError,
+    for Utf8Error => Utf8
+}
 
 display_error! {
     StringError,
     #prefix "Failed to convert rust to sqlite string: ",
-    #delegate NulError,
+    #delegate NulError Utf8,
     Self::TooLarge => ("string too large, sqlite max string is i32::MAX"),
-    Self::Utf8 => ("value is not UTF-8")
 }
 
 /// an error when failed to open a database connection
@@ -156,7 +159,8 @@ impl From<std::ffi::NulError> for OpenError {
 from! {
     OpenError,
     for DatabaseError => Database,
-    for StringError => String
+    for StringError => String,
+    for Utf8Error => String
 }
 
 is_busy!(OpenError, me => matches!(me,OpenError::Database(d) if d.is_busy()));

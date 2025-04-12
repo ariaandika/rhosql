@@ -3,7 +3,7 @@ use crate::{
     common::SqliteStr,
     error::PrepareError,
     row::ValueRef,
-    sqlite::{OpenFlag, SqliteHandle},
+    sqlite::{DatabaseExt, OpenFlag, SqliteHandle},
     statement::Statement,
 };
 
