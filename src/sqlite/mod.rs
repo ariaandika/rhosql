@@ -1,6 +1,4 @@
 //! A safe interface to sqlite ffi.
-//!
-//! This is low level interface, user typically does work with it directly.
 
 pub mod error;
 
@@ -11,7 +9,7 @@ mod raii;
 
 pub use error::DatabaseError;
 pub use open_flag::OpenFlag;
-pub use database::{Database, DatabaseExt};
+pub use database::{Database, DatabaseExt, check_threadsafe};
 pub use statement::{Statement, StatementExt};
 pub use raii::{SqliteHandle, StatementHandle, SqliteMutexGuard};
 

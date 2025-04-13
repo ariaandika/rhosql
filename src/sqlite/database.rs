@@ -49,6 +49,14 @@ pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<*mut ffi::sqlite3, Databa
     }
 }
 
+/// Returns `true` if sqlite is compiled with serialize mode enabled
+///
+/// <https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode>
+pub fn check_threadsafe() -> bool {
+    const SERIALIZE_MODE: i32 = 1;
+    unsafe { ffi::sqlite3_threadsafe() == SERIALIZE_MODE }
+}
+
 /// A trait that represent [`sqlite3`][1] object.
 ///
 /// Database operation provided by [`DatabaseExt`].
@@ -56,6 +64,18 @@ pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<*mut ffi::sqlite3, Databa
 /// [1]: <https://sqlite.org/c3ref/sqlite3.html>
 pub trait Database {
     fn as_ptr(&self) -> *mut ffi::sqlite3;
+}
+
+impl<D> Database for &mut D where D: Database {
+    fn as_ptr(&self) -> *mut libsqlite3_sys::sqlite3 {
+        D::as_ptr(self)
+    }
+}
+
+impl<D> Database for &D where D: Database {
+    fn as_ptr(&self) -> *mut libsqlite3_sys::sqlite3 {
+        D::as_ptr(self)
+    }
 }
 
 impl Database for *mut ffi::sqlite3 {

@@ -67,7 +67,7 @@ impl Statement for *mut ffi::sqlite3_stmt {
 impl<T> StatementExt for T where T: Statement + Database { }
 
 pub trait StatementExt: Statement + Database {
-    fn step(&mut self) -> Result<bool, StepError> {
+    fn step(&self) -> Result<bool, StepError> {
         match unsafe { ffi::sqlite3_step(self.as_stmt_ptr()) } {
             ffi::SQLITE_ROW => Ok(true),
             ffi::SQLITE_DONE => Ok(false),
@@ -75,11 +75,11 @@ pub trait StatementExt: Statement + Database {
         }
     }
 
-    fn reset(&mut self) -> Result<(), ResetError> {
+    fn reset(&self) -> Result<(), ResetError> {
         ffi_stmt!(sqlite3_reset(self.as_ptr(), self.as_stmt_ptr()))
     }
 
-    fn clear_bindings(&mut self) -> Result<(), ResetError> {
+    fn clear_bindings(&self) -> Result<(), ResetError> {
         ffi_stmt!(sqlite3_clear_bindings(self.as_ptr(), self.as_stmt_ptr()))
     }
 

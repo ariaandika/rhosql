@@ -2,6 +2,7 @@
 use std::mem::{self, MaybeUninit};
 
 /// Stack allocated first in last out list
+#[derive(Debug)]
 pub struct Stack<T, const S: usize = 64> {
     items: [MaybeUninit<T>;S],
     len: usize,

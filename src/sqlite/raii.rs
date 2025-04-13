@@ -1,7 +1,10 @@
 use libsqlite3_sys::{self as ffi};
 use std::{ffi::CStr, marker::PhantomData};
 
-use super::{Database, DatabaseError, OpenFlag, Statement, database, statement};
+use super::{
+    Database, DatabaseError, OpenFlag, Statement, database, error::PrepareError, statement,
+};
+use crate::SqliteStr;
 
 /// An RAII implementation of a [`sqlite3`][1] object. When this structure is
 /// dropped (falls out of scope), `sqlite3` will be [`close`][2].
@@ -11,7 +14,7 @@ use super::{Database, DatabaseError, OpenFlag, Statement, database, statement};
 /// [1]: <https://sqlite.org/c3ref/sqlite3.html>
 /// [2]: <https://sqlite.org/c3ref/close.html>
 /// [3]: super::DatabaseExt
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SqliteHandle {
     sqlite: *mut ffi::sqlite3,
 }
@@ -55,15 +58,19 @@ impl Drop for SqliteHandle {
 /// [1]: <https://sqlite.org/c3ref/sqlite3_stmt.html>
 /// [2]: <https://sqlite.org/c3ref/finalize.html>
 /// [3]: super::StatementExt
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,
     db: *mut ffi::sqlite3,
 }
 
 impl StatementHandle {
-    pub(crate) fn new(stmt: *mut ffi::sqlite3_stmt, db: *mut ffi::sqlite3) -> Self {
-        Self { stmt, db }
+    pub(crate) fn prepare<DB: Database, S: SqliteStr>(db: DB, sql: S) -> Result<Self, PrepareError> {
+        let db = db.as_ptr();
+        Ok(Self {
+            stmt: super::statement::prepare_v2(db, sql)?,
+            db,
+        })
     }
 
     /// Finalize the prepared statement
