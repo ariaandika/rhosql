@@ -16,6 +16,7 @@ pub use raii::{SqliteHandle, StatementHandle, SqliteMutexGuard};
 macro_rules! flags {
     ($(#[$doc:meta])* $id:ident, $($(#[$doc2:meta])* $fl:ident => $name:ident),* $(,)?) => {
         $(#[$doc])*
+        #[derive(Debug, PartialEq, Eq)]
         pub enum $id {
             $($(#[$doc2])* $name),*
         }
@@ -58,6 +59,18 @@ flags! {
     SQLITE_DONE => Done,
     /// A new row of data is ready for processing by the caller.
     SQLITE_ROW => Row,
+}
+
+impl StepResult {
+    /// Return `true` if statement has finished executing successfully.
+    pub fn is_done(&self) -> bool {
+        matches!(self, StepResult::Done)
+    }
+
+    /// Return `true` if a new row of data is ready for processing.
+    pub fn is_row(&self) -> bool {
+        matches!(self, StepResult::Row)
+    }
 }
 
 /// Returns `true` if sqlite is compiled with serialize mode enabled

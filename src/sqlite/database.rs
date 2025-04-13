@@ -173,5 +173,12 @@ pub trait DatabaseExt: Database {
     fn extended_errcode(&self) -> i32 {
         unsafe { ffi::sqlite3_extended_errcode(self.as_ptr()) }
     }
+
+    /// Close the database.
+    ///
+    /// <https://sqlite.org/c3ref/close.html>
+    fn close(&self) -> Result<(), DatabaseError> {
+        ffi_db!(sqlite3_close(self.as_ptr()) as _)
+    }
 }
 

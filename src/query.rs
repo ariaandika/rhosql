@@ -11,7 +11,7 @@ pub trait Execute {
 
 impl Execute for &crate::sqlite::SqliteHandle {
     fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
-        StatementHandle::prepare(self.as_ptr(), sql).map_err(Into::into)
+        StatementHandle::prepare_v2(self.as_ptr(), sql).map_err(Into::into)
     }
 }
 

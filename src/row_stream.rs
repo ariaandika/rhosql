@@ -42,7 +42,7 @@ impl<'stmt> RowStream<'stmt> {
         }
 
         use crate::sqlite::StatementExt;
-        if !self.stmt.handle_mut().step()? {
+        if self.stmt.handle_mut().step()?.is_done() {
             self.done = true;
             return Ok(None);
         }

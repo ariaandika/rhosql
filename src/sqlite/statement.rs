@@ -2,9 +2,7 @@ use libsqlite3_sys::{self as ffi};
 use std::ptr;
 
 use super::{
-    DataType, Database, DatabaseError,
-    database::ffi_db,
-    error::{BindError, DecodeError, PrepareError, ResetError, StepError},
+    database::ffi_db, error::{BindError, DecodeError, PrepareError, ResetError, StepError}, DataType, Database, DatabaseError, StepResult
 };
 use crate::common::SqliteStr;
 
@@ -70,10 +68,10 @@ impl<T> StatementExt for T where T: Statement + Database { }
 
 /// Statement operation.
 pub trait StatementExt: Statement + Database {
-    fn step(&self) -> Result<bool, StepError> {
+    fn step(&self) -> Result<StepResult, StepError> {
         match unsafe { ffi::sqlite3_step(self.as_stmt_ptr()) } {
-            ffi::SQLITE_ROW => Ok(true),
-            ffi::SQLITE_DONE => Ok(false),
+            ffi::SQLITE_ROW => Ok(StepResult::Row),
+            ffi::SQLITE_DONE => Ok(StepResult::Done),
             result => Err(DatabaseError::from_code(result, self.as_ptr()).into()),
         }
     }
@@ -88,25 +86,40 @@ pub trait StatementExt: Statement + Database {
 
     // NOTE: parameter encoding
 
+    /// Bind integer to parameter at given index.
+    ///
+    /// Note that parameter index is one based.
     fn bind_int(&self, idx: i32, value: i32) -> Result<(), BindError> {
         ffi_stmt!(sqlite3_bind_int(self.as_ptr(), self.as_stmt_ptr(), idx, value))
     }
 
+    /// Bind float to parameter at given index.
+    ///
+    /// Note that parameter index is one based.
     fn bind_double(&self, idx: i32, value: f64) -> Result<(), BindError> {
         ffi_stmt!(sqlite3_bind_double(self.as_ptr(), self.as_stmt_ptr(), idx, value))
     }
 
+    /// Bind null to parameter at given index.
+    ///
+    /// Note that parameter index is one based.
     fn bind_null(&self, idx: i32) -> Result<(), BindError> {
         ffi_stmt!(sqlite3_bind_null(self.as_ptr(), self.as_stmt_ptr(), idx))
     }
 
     // todo: maybe choose other than SQLITE_TRANSIENT
 
+    /// Bind text to parameter at given index.
+    ///
+    /// Note that parameter index is one based.
     fn bind_text<S: SqliteStr>(&self, idx: i32, text: S) -> Result<(), BindError> {
         let (ptr, len, dtor) = text.as_sqlite_str()?;
         ffi_stmt!(sqlite3_bind_text(self.as_ptr(), self.as_stmt_ptr(), idx, ptr, len, dtor))
     }
 
+    /// Bind blob to parameter at given index.
+    ///
+    /// Note that parameter index is one based.
     fn bind_blob(&self, idx: i32, data: &[u8]) -> Result<(), BindError> {
         ffi_stmt!(sqlite3_bind_blob(
             self.as_ptr(),
@@ -120,6 +133,16 @@ pub trait StatementExt: Statement + Database {
 
     // NOTE: column decoding
 
+
+
+    /// Returns the number of columns, with or without results.
+    fn column_count(&self) -> i32 {
+        unsafe { ffi::sqlite3_column_count(self.as_stmt_ptr()) }
+    }
+
+    /// Returns the number of values (columns) of the currently executing statement.
+    ///
+    /// With no results it returns 0.
     fn data_count(&self) -> i32 {
         unsafe { ffi::sqlite3_data_count(self.as_stmt_ptr()) }
     }
@@ -155,6 +178,13 @@ pub trait StatementExt: Statement + Database {
 
     fn column_bytes(&self, idx: i32) -> i32 {
         unsafe { ffi::sqlite3_column_bytes(self.as_stmt_ptr(), idx) }
+    }
+
+    /// Delete the prepared staement.
+    ///
+    /// <https://sqlite.org/c3ref/finalize.html>
+    fn finalize(&self) -> Result<(), DatabaseError> {
+        ffi_stmt!(sqlite3_finalize(self.as_ptr(), self.as_stmt_ptr()) as _)
     }
 }
 

@@ -2,7 +2,8 @@ use libsqlite3_sys::{self as ffi};
 use std::ffi::CStr;
 
 use super::{
-    Database, DatabaseError, OpenFlag, Statement, database, error::PrepareError, statement,
+    Database, DatabaseExt, OpenFlag, Statement, StatementExt,
+    error::{OpenError, PrepareError},
 };
 use crate::SqliteStr;
 
@@ -31,7 +32,7 @@ impl SqliteHandle {
     /// > The filename argument is interpreted as UTF-8 for sqlite3_open() and sqlite3_open_v2()
     /// >
     /// > <https://sqlite.org/c3ref/open.html>
-    pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<Self, DatabaseError> {
+    pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<Self, OpenError> {
         Ok(Self {
             sqlite: super::database::open_v2(path, flags)?,
         })
@@ -47,7 +48,7 @@ impl Database for SqliteHandle {
 /// Close the database
 impl Drop for SqliteHandle {
     fn drop(&mut self) {
-        if let Err(_err) = database::ffi_db!(sqlite3_close(self.sqlite) as _) {
+        if let Err(_err) = self.close() {
             #[cfg(feature = "log")]
             log::error!("Failed to close db on drop: {_err}")
         }
@@ -72,16 +73,13 @@ pub struct StatementHandle {
 }
 
 impl StatementHandle {
-    pub(crate) fn prepare<DB: Database, S: SqliteStr>(db: DB, sql: S) -> Result<Self, PrepareError> {
+    pub fn prepare_v2<DB: Database, S: SqliteStr>(db: DB, sql: S) -> Result<Self, PrepareError> {
         let db = db.as_ptr();
         Ok(Self {
             stmt: super::statement::prepare_v2(db, sql)?,
             db,
         })
     }
-
-    /// Finalize the prepared statement
-    pub fn finalize(self) { }
 }
 
 impl Database for StatementHandle {
@@ -99,7 +97,7 @@ impl Statement for StatementHandle {
 /// Finalize the prepared statement
 impl Drop for StatementHandle {
     fn drop(&mut self) {
-        if let Err(_err) = statement::ffi_stmt!(sqlite3_finalize(self.db, self.stmt) as _) {
+        if let Err(_err) = self.finalize() {
             #[cfg(feature = "log")]
             log::error!("Failed to finalize prepare statement on drop: {_err}")
         }
