@@ -2,7 +2,9 @@ use libsqlite3_sys::{self as ffi};
 use std::ptr;
 
 use super::{
-    database::ffi_db, error::{BindError, DecodeError, PrepareError, ResetError, StepError}, DataType, Database, DatabaseError, StepResult
+    DataType, Database, DatabaseError, StepResult,
+    database::ffi_db,
+    error::{BindError, DecodeError, PrepareError, ResetError, StepError},
 };
 use crate::common::SqliteStr;
 
@@ -58,9 +60,33 @@ pub trait Statement {
     fn as_stmt_ptr(&self) -> *mut ffi::sqlite3_stmt;
 }
 
+impl<S> Statement for &mut S where S: Statement {
+    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+        S::as_stmt_ptr(self)
+    }
+}
+
+impl<S> Statement for &S where S: Statement {
+    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+        S::as_stmt_ptr(self)
+    }
+}
+
 impl Statement for *mut ffi::sqlite3_stmt {
     fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
         *self
+    }
+}
+
+impl Database for (*mut ffi::sqlite3, *mut ffi::sqlite3_stmt) {
+    fn as_ptr(&self) -> *mut libsqlite3_sys::sqlite3 {
+        self.0
+    }
+}
+
+impl Statement for (*mut ffi::sqlite3, *mut ffi::sqlite3_stmt) {
+    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+        self.1
     }
 }
 

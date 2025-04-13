@@ -5,26 +5,34 @@
 // Connection: hold db handle, cache prepared statement
 // Pool: hold multiple Connection
 
+// internal utility
 mod common;
-mod pool;
 
+// low level api
 pub mod sqlite;
 
+// high level api
 mod connection;
-
 pub mod statement;
 pub mod row_stream;
 pub mod row;
 pub mod from_row;
+
+// error
+pub mod error;
+
+// utility api
+mod pool;
 pub mod query;
 
-pub mod error;
+
+
+// reexports
 
 pub use common::SqliteStr;
 pub use connection::Connection;
-pub use row::Row;
+pub use row::{Row, ValueRef};
 pub use from_row::FromRow;
 pub use error::{Result, Error};
-
 pub use rhosql_macros::FromRow;
 

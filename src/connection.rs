@@ -9,16 +9,17 @@ use crate::{
     common::SqliteStr,
     row::ValueRef,
     sqlite::{
-        Database, DatabaseExt, OpenFlag, SqliteHandle, StatementHandle,
+        Database, DatabaseExt, OpenFlag, SqliteHandle,
         error::{OpenError, PrepareError},
     },
     statement::Statement,
 };
+
 /// Database connection.
 #[derive(Debug)]
 pub struct Connection {
-    handle: SqliteHandle,
     stmts: LruCache<u64, Statement>,
+    handle: SqliteHandle,
 }
 
 /// SAFETY: Checked that sqlite compiled with `SERIALIZE_MODE`
@@ -43,8 +44,8 @@ impl Connection {
             Err(OpenError::NotSerializeMode)?;
         }
 
-        let mut handle = SqliteHandle::open_v2(&path.to_nul_string().map_err(OpenError::from)?, flags)
-            .map_err(OpenError::from)?;
+        let path = path.to_nul_string().map_err(OpenError::from)?;
+        let mut handle = SqliteHandle::open_v2(&path, flags)?;
 
         handle.extended_result_codes(true)?;
         handle.busy_timeout(std::time::Duration::from_secs(5))?;
@@ -55,26 +56,23 @@ impl Connection {
         })
     }
 
-    /// create a prepared statement
-    pub fn prepare<S: SqliteStr + Hash>(&self, sql: S) -> Result<&mut Statement, PrepareError> {
-        todo!()
-        // let mut hash = DefaultHasher::new();
-        // sql.hash(&mut hash);
-        // let key = hash.finish();
-        //
-        // let handle = self.handle.clone();
-        //
-        // if let Some(ok) = self.stmts.get_mut(&key) {
-        //     Ok(ok)
-        // } else {
-        //     let stmt = StatementHandle::prepare(handle, sql)?;
-        //     Statement::prepare(handle, sql)
-        // }
+    /// Create a prepared statement.
+    ///
+    /// Prepared statement is cached internally.
+    pub fn prepare<S: SqliteStr + Hash>(&mut self, sql: S) -> Result<&mut Statement, PrepareError> {
+        let mut hash = DefaultHasher::new();
+        sql.hash(&mut hash);
+        let key = hash.finish();
+
+        self.stmts
+            .try_get_or_insert_mut(key, || Statement::prepare(self.handle.as_ptr(), sql))
     }
 
-    /// execute a single statement
+    /// Execute a single statement.
+    ///
+    /// Prepared statement is cached internally.
     pub fn exec<'a, S: SqliteStr + Hash, R: IntoIterator<Item = ValueRef<'a>>>(
-        &self,
+        &mut self,
         sql: S,
         args: R,
     ) -> Result<()> {

@@ -1,21 +1,37 @@
+use std::marker::PhantomData;
+
 use crate::{
     Result,
     from_row::FromRow,
-    row_stream::RowStream,
-    sqlite::{DataType, StatementExt, error::DecodeError},
+    sqlite::{
+        DataType, StatementExt,
+        error::{BindError, DecodeError},
+    },
 };
 
 /// unencoded row buffer
 #[derive(Debug)]
-pub struct Row<'row,'stmt> {
-    // we cannot borrow Statement here, cus mutable reference
-    row_stream: &'row RowStream<'stmt>,
+pub struct Row<'row> {
+    handle: (
+        *mut libsqlite3_sys::sqlite3,
+        *mut libsqlite3_sys::sqlite3_stmt,
+    ),
     col_count: i32,
+    _p: PhantomData<&'row mut ()>,
 }
 
-impl<'row,'stmt> Row<'row,'stmt> {
-    pub(crate) fn new(row_stream: &'row RowStream<'stmt>) -> Self {
-        Self { col_count: row_stream.stmt().handle().data_count(), row_stream }
+impl<'row> Row<'row> {
+    pub fn new(
+        handle: (
+            *mut libsqlite3_sys::sqlite3,
+            *mut libsqlite3_sys::sqlite3_stmt,
+        ),
+    ) -> Self {
+        Self {
+            col_count: handle.data_count(),
+            handle,
+            _p: PhantomData,
+        }
     }
 
     /// try get single column from given index
@@ -23,16 +39,7 @@ impl<'row,'stmt> Row<'row,'stmt> {
         if idx >= self.col_count {
             return Err(DecodeError::IndexOutOfBounds)
         }
-
-        let value = match self.stmt().column_type(idx) {
-            DataType::Null => ValueRef::Null,
-            DataType::Int => ValueRef::Int(self.stmt().column_int(idx)),
-            DataType::Float => ValueRef::Float(self.stmt().column_double(idx)),
-            DataType::Text => ValueRef::Text(self.stmt().column_text(idx)?),
-            DataType::Blob => ValueRef::Blob(self.stmt().column_blob(idx)),
-        };
-
-        Ok(value)
+        ValueRef::decode(idx, &self.handle)
     }
 
     /// try decode single column from given index
@@ -55,10 +62,6 @@ impl<'row,'stmt> Row<'row,'stmt> {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-    fn stmt(&self) -> &crate::sqlite::StatementHandle {
-        self.row_stream.stmt().handle()
-    }
 }
 
 #[derive(Debug)]
@@ -68,6 +71,30 @@ pub enum ValueRef<'a> {
     Float(f64),
     Text(&'a str),
     Blob(&'a [u8]),
+}
+
+impl<'a> ValueRef<'a> {
+    pub fn bind<S: StatementExt>(&self, idx: i32, handle: S) -> Result<(), BindError> {
+        match *self {
+            ValueRef::Null => handle.bind_null(idx)?,
+            ValueRef::Int(int) => handle.bind_int(idx, int)?,
+            ValueRef::Float(fl) => handle.bind_double(idx, fl)?,
+            ValueRef::Text(t) => handle.bind_text(idx, t)?,
+            ValueRef::Blob(b) => handle.bind_blob(idx, b)?,
+        }
+        Ok(())
+    }
+
+    pub fn decode<S: StatementExt>(idx: i32, handle: &S) -> Result<ValueRef<'_>, DecodeError> {
+        let value = match handle.column_type(idx) {
+            DataType::Null => ValueRef::Null,
+            DataType::Int => ValueRef::Int(handle.column_int(idx)),
+            DataType::Float => ValueRef::Float(handle.column_double(idx)),
+            DataType::Text => ValueRef::Text(handle.column_text(idx)?),
+            DataType::Blob => ValueRef::Blob(handle.column_blob(idx)),
+        };
+        Ok(value)
+    }
 }
 
 impl Clone for ValueRef<'_> {

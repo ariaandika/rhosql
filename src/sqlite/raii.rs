@@ -19,7 +19,7 @@ use crate::SqliteStr;
 /// [1]: <https://sqlite.org/c3ref/sqlite3.html>
 /// [2]: <https://sqlite.org/c3ref/close.html>
 /// [3]: super::DatabaseExt
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SqliteHandle {
     sqlite: *mut ffi::sqlite3,
 }
@@ -66,7 +66,7 @@ impl Drop for SqliteHandle {
 /// [1]: <https://sqlite.org/c3ref/stmt.html>
 /// [2]: <https://sqlite.org/c3ref/finalize.html>
 /// [3]: super::StatementExt
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,
     db: *mut ffi::sqlite3,
@@ -115,6 +115,7 @@ impl Drop for StatementHandle {
 /// [1]: <https://sqlite.org/c3ref/mutex_alloc.html>
 /// [3]: super::StatementExt
 /// [new]: super::DatabaseExt::mutex_enter
+#[derive(Debug)]
 pub struct SqliteMutexGuard {
     lock: *mut ffi::sqlite3_mutex,
 }

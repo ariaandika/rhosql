@@ -1,63 +1,61 @@
+use std::marker::PhantomData;
+
 use crate::{
     Result,
     row::{Row, ValueRef},
     sqlite::{
-        StatementExt,
+        Database, Statement, StatementExt, StatementHandle,
         error::{BindError, StepError},
     },
-    statement::Statement,
 };
 
-/// bounded [`Statement`] and ready for iteration
+/// Bounded prepared statement and ready for iteration.
 #[derive(Debug)]
 pub struct RowStream<'stmt> {
-    stmt: &'stmt mut Statement,
+    handle: (
+        *mut libsqlite3_sys::sqlite3,
+        *mut libsqlite3_sys::sqlite3_stmt,
+    ),
     done: bool,
+    _p: PhantomData<&'stmt mut ()>,
 }
 
 impl<'stmt> RowStream<'stmt> {
-    pub(crate) fn setup<'input, R: IntoIterator<Item = ValueRef<'input>>>(
-        stmt: &'stmt mut Statement,
+    pub(crate) fn bind<'input, R: IntoIterator<Item = ValueRef<'input>>>(
+        stmt: &StatementHandle,
         args: R,
     ) -> Result<Self, BindError> {
-        let me = Self { stmt, done: false };
-        let iter = args.into_iter().enumerate().map(|e| (e.0 as i32 + 1, e.1));
+        let me = Self {
+            handle: (stmt.as_ptr(), stmt.as_stmt_ptr()),
+            done: false,
+            _p: PhantomData,
+        };
 
-        for (i, value) in iter {
-            match value {
-                ValueRef::Null => me.stmt.handle_mut().bind_null(i)?,
-                ValueRef::Int(int) => me.stmt.handle_mut().bind_int(i, int)?,
-                ValueRef::Float(fl) => me.stmt.handle_mut().bind_double(i, fl)?,
-                ValueRef::Text(t) => me.stmt.handle_mut().bind_text(i, t)?,
-                ValueRef::Blob(b) => me.stmt.handle_mut().bind_blob(i, b)?,
-            }
+        for (i, value) in (1i32..).zip(args) {
+            value.bind(i, &me.handle)?;
         }
+
         Ok(me)
     }
 
     /// fetch the next row
-    pub fn next<'me>(&'me mut self) -> Result<Option<Row<'me,'stmt>>, StepError> {
+    pub fn next<'me>(&'me mut self) -> Result<Option<Row<'me>>, StepError> {
         if self.done {
             return Ok(None);
         }
 
-        use crate::sqlite::StatementExt;
-        if self.stmt.handle_mut().step()?.is_done() {
+        if self.handle.step()?.is_done() {
             self.done = true;
             return Ok(None);
         }
 
-        Ok(Some(Row::new(self)))
-    }
-
-    pub(crate) fn stmt(&self) -> &Statement {
-        self.stmt
+        Ok(Some(Row::new(self.handle)))
     }
 }
 
 impl Drop for RowStream<'_> {
     fn drop(&mut self) {
-        if let Err(err) = self.stmt.reset() {
+        if let Err(err) = self.handle.reset() {
             eprintln!("{err}");
         }
     }
