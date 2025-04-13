@@ -2,7 +2,9 @@ use libsqlite3_sys::{self as ffi};
 use std::ptr;
 
 use super::{
-    database::ffi_db, error::{BindError, DecodeError, PrepareError, ResetError, StepError}, DataType, Database, DatabaseError
+    DataType, Database, DatabaseError,
+    database::ffi_db,
+    error::{BindError, DecodeError, PrepareError, ResetError, StepError},
 };
 use crate::common::SqliteStr;
 
@@ -66,6 +68,7 @@ impl Statement for *mut ffi::sqlite3_stmt {
 
 impl<T> StatementExt for T where T: Statement + Database { }
 
+/// Statement operation.
 pub trait StatementExt: Statement + Database {
     fn step(&self) -> Result<bool, StepError> {
         match unsafe { ffi::sqlite3_step(self.as_stmt_ptr()) } {

@@ -49,14 +49,6 @@ pub fn open_v2(path: &CStr, flags: OpenFlag) -> Result<*mut ffi::sqlite3, Databa
     }
 }
 
-/// Returns `true` if sqlite is compiled with serialize mode enabled
-///
-/// <https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode>
-pub fn check_threadsafe() -> bool {
-    const SERIALIZE_MODE: i32 = 1;
-    unsafe { ffi::sqlite3_threadsafe() == SERIALIZE_MODE }
-}
-
 /// A trait that represent [`sqlite3`][1] object.
 ///
 /// Database operation provided by [`DatabaseExt`].
@@ -103,7 +95,7 @@ pub trait DatabaseExt: Database {
     /// this call will block
     ///
     /// this is a wrapper for `sqlite3_last_insert_rowid()`
-    fn mutex_enter(&self) -> SqliteMutexGuard<'_> {
+    fn mutex_enter(&self) -> SqliteMutexGuard {
         let lock = unsafe {
             let lock = ffi::sqlite3_db_mutex(self.as_ptr());
             assert!(!lock.is_null(),"connection guarantee to be in serialize mode");

@@ -114,10 +114,6 @@ pub struct DatabaseError {
 impl DatabaseError {
     /// Convert result code into [`DatabaseError`].
     pub(crate) fn from_code(result: i32, db: *mut ffi::sqlite3) -> Self {
-        if ffi::SQLITE_MISUSE == result {
-            panic!("(bug) sqlite returns SQLITE_MISUSE")
-        }
-
         let data = unsafe { ffi::sqlite3_errmsg(db) };
         if data.is_null() {
             return Self { message: ffi::code_to_str(result).into(), code: result }

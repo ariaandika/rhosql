@@ -39,7 +39,7 @@ impl Connection {
 
     /// Open a database connection with given flag.
     pub fn open_with<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
-        if !crate::sqlite::check_threadsafe() {
+        if !crate::sqlite::is_threadsafe() {
             Err(OpenError::NotSerializeMode)?;
         }
 

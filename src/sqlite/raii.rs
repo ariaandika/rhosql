@@ -1,15 +1,19 @@
 use libsqlite3_sys::{self as ffi};
-use std::{ffi::CStr, marker::PhantomData};
+use std::ffi::CStr;
 
 use super::{
     Database, DatabaseError, OpenFlag, Statement, database, error::PrepareError, statement,
 };
 use crate::SqliteStr;
 
-/// An RAII implementation of a [`sqlite3`][1] object. When this structure is
-/// dropped (falls out of scope), `sqlite3` will be [`close`][2].
+/// An RAII implementation of a [`sqlite3`][1] object.
+///
+/// When this structure is dropped (falls out of scope), `sqlite3` will be [`close`][2].
 ///
 /// Database operation is provided by [`DatabaseExt`][3] extension trait.
+///
+/// Note that this object must outlive any prepared statement and blob handle, otherwise
+/// `close` on drop will fail, and database still open in unreachable state.
 ///
 /// [1]: <https://sqlite.org/c3ref/sqlite3.html>
 /// [2]: <https://sqlite.org/c3ref/close.html>
@@ -50,12 +54,15 @@ impl Drop for SqliteHandle {
     }
 }
 
-/// An RAII implementation of a [`sqlite3_stmt`][1] object. When this structure is
-/// dropped (falls out of scope), `sqlite3_stmt` will be [`finalize`][2].
+/// An RAII implementation of a [`sqlite3_stmt`][1] object.
+///
+/// When this structure is dropped (falls out of scope), `sqlite3_stmt` will be [`finalize`][2].
 ///
 /// Statement operation is provided by [`StatementExt`][3] extension trait.
 ///
-/// [1]: <https://sqlite.org/c3ref/sqlite3_stmt.html>
+/// Note that the database this statement created from, must outlive this statement.
+///
+/// [1]: <https://sqlite.org/c3ref/stmt.html>
 /// [2]: <https://sqlite.org/c3ref/finalize.html>
 /// [3]: super::StatementExt
 #[derive(Debug, Clone)]
@@ -99,26 +106,28 @@ impl Drop for StatementHandle {
     }
 }
 
-/// An RAII implementation of a [`sqlite3_mutex`][1] object. When this structure is
-/// dropped (falls out of scope), `sqlite3_mutex` will be [`released`][1].
+/// An RAII implementation of a [`sqlite3_mutex`][1] object.
+///
+/// On creation, `sqlite3_mutex` will be in `enter` state.
+///
+/// When this structure is dropped (falls out of scope), `sqlite3_mutex` will be `exited`.
+///
+/// This structure is created by [`mutex_enter`][new] method
 ///
 /// [1]: <https://sqlite.org/c3ref/mutex_alloc.html>
 /// [3]: super::StatementExt
-pub struct SqliteMutexGuard<'a> {
+/// [new]: super::DatabaseExt::mutex_enter
+pub struct SqliteMutexGuard {
     lock: *mut ffi::sqlite3_mutex,
-    _p: PhantomData<&'a ()>,
 }
 
-impl<'a> SqliteMutexGuard<'a> {
+impl SqliteMutexGuard {
     pub(crate) fn new(lock: *mut ffi::sqlite3_mutex) -> Self {
-        Self {
-            lock,
-            _p: PhantomData,
-        }
+        Self { lock }
     }
 }
 
-impl Drop for SqliteMutexGuard<'_> {
+impl Drop for SqliteMutexGuard {
     fn drop(&mut self) {
         unsafe { ffi::sqlite3_mutex_leave(self.lock) }
     }

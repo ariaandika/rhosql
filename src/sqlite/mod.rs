@@ -9,14 +9,15 @@ mod raii;
 
 pub use error::DatabaseError;
 pub use open_flag::OpenFlag;
-pub use database::{Database, DatabaseExt, check_threadsafe};
+pub use database::{Database, DatabaseExt};
 pub use statement::{Statement, StatementExt};
 pub use raii::{SqliteHandle, StatementHandle, SqliteMutexGuard};
 
 macro_rules! flags {
-    ($id:ident, $($fl:ident => $name:ident),* $(,)?) => {
+    ($(#[$doc:meta])* $id:ident, $($(#[$doc2:meta])* $fl:ident => $name:ident),* $(,)?) => {
+        $(#[$doc])*
         pub enum $id {
-            $($name),*
+            $($(#[$doc2])* $name),*
         }
 
         impl $id {
@@ -31,17 +32,39 @@ macro_rules! flags {
 }
 
 flags! {
+    /// Return type for [`sqlite3_column_type`][ty].
+    ///
+    /// Sqlite fundamental datatype.
+    ///
+    /// <https://sqlite.org/c3ref/c_blob.html>
+    ///
+    /// [ty]: StatementExt::column_type
     DataType,
     SQLITE_NULL => Null,
     SQLITE_INTEGER => Int,
     SQLITE_FLOAT => Float,
-    SQLITE_TEXT => Text,
+    SQLITE3_TEXT => Text,
     SQLITE_BLOB => Blob,
 }
 
 flags! {
+    /// Return type for [`sqlite3_step`][ty].
+    ///
+    /// <https://sqlite.org/c3ref/step.html>
+    ///
+    /// [ty]: StatementExt::step
     StepResult,
+    /// The statement has finished executing successfully.
     SQLITE_DONE => Done,
+    /// A new row of data is ready for processing by the caller.
     SQLITE_ROW => Row,
+}
+
+/// Returns `true` if sqlite is compiled with serialize mode enabled
+///
+/// <https://www.sqlite.org/threadsafe.html#compile_time_selection_of_threading_mode>
+pub fn is_threadsafe() -> bool {
+    const SERIALIZE_MODE: i32 = 1;
+    unsafe { libsqlite3_sys::sqlite3_threadsafe() == SERIALIZE_MODE }
 }
 
