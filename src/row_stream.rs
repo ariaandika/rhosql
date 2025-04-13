@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    Result,
+    FromRow, Result,
     row::{Row, ValueRef},
     sqlite::{
         Database, Statement, StatementExt, StatementHandle,
@@ -50,6 +50,13 @@ impl<'stmt> RowStream<'stmt> {
         }
 
         Ok(Some(Row::new(self.handle)))
+    }
+
+    pub fn next_row<R: FromRow>(&mut self) -> Result<Option<R>> {
+        Ok(match self.next()? {
+            Some(ok) => Some(R::from_row(ok)?),
+            None => None,
+        })
     }
 }
 
