@@ -12,22 +12,27 @@ fn main() {
 }
 
 fn basic() -> rhosql::Result<()> {
+    use rhosql::sqlite::DatabaseExt;
     use rhosql::{Connection, ValueRef};
 
     let mut db = Connection::open(":memory:")?;
+    let name = "john".to_string();
 
     db.exec("create table if not exists users(name)",[])?;
     db.exec(
         "insert into users(name) values(?1)",
-        [ValueRef::Text(&format!("john"))],
+        [ValueRef::Text(&name)],
     )?;
+
+    let id = db.last_insert_rowid() as _;
 
     let stmt = db.prepare("select rowid,name,?1 from users")?;
 
     // scoped for `rows` drop and reset statement
     {
-        let mut rows = stmt.bind([ValueRef::Text("Deez")])?;
-        assert_eq!(rows.next_row()?, Some(User { id: 1, name: "john".into(), item: "Deez".into() }));
+        let item = "Deez".to_string();
+        let mut rows = stmt.bind([ValueRef::Text(&item)])?;
+        assert_eq!(rows.next_row()?, Some(User { id, name: name.clone(), item }));
         assert_eq!(rows.next_row::<User>()?, None);
     }
 
@@ -35,8 +40,9 @@ fn basic() -> rhosql::Result<()> {
     let stmt = db.prepare("select rowid,name,?1 from users")?;
 
     {
-        let mut rows = stmt.bind([ValueRef::Text("Cloak")])?;
-        assert_eq!(rows.next_row()?, Some(User { id: 1, name: "john".into(), item: "Cloak".into() }));
+        let item = "Cloak".to_string();
+        let mut rows = stmt.bind([ValueRef::Text(&item)])?;
+        assert_eq!(rows.next_row()?, Some(User { id, name: name.clone(), item }));
         assert_eq!(rows.next_row::<User>()?, None);
     }
 
