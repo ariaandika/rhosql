@@ -6,7 +6,7 @@ struct User {
 }
 
 fn main() {
-    env_logger::init();
+    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
     basic().inspect_err(|e|eprintln!("{e}")).ok();
     low_level().inspect_err(|e|eprintln!("{e}")).ok();
 }
@@ -30,6 +30,10 @@ fn basic() -> rhosql::Result<()> {
         assert_eq!(rows.next_row()?, Some(User { id: 1, name: "john".into(), item: "Deez".into() }));
         assert_eq!(rows.next_row::<User>()?, None);
     }
+
+    // cached
+    let stmt = db.prepare("select rowid,name,?1 from users")?;
+
     {
         let mut rows = stmt.bind([ValueRef::Text("Cloak")])?;
         assert_eq!(rows.next_row()?, Some(User { id: 1, name: "john".into(), item: "Cloak".into() }));

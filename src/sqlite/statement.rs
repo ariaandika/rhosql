@@ -46,7 +46,11 @@ pub fn prepare_v2<S: SqliteStr>(db: *mut ffi::sqlite3, sql: S) -> Result<*mut ff
     let mut stmt = ptr::null_mut();
     let (ptr, len, _) = sql.as_nulstr();
     match ffi_db!(sqlite3_prepare_v2(db, ptr, len, &mut stmt, ptr::null_mut())) {
-        Ok(()) => Ok(stmt),
+        Ok(()) => {
+            #[cfg(feature = "log")]
+            log::debug!("prepared {sql:?}");
+            Ok(stmt)
+        },
         Err(err) => Err(err),
     }
 }
