@@ -1,8 +1,8 @@
 # Rhosql
 
-Adequate SQLite driver.
+SQLite driver.
 
-The `rusqlite` crate is just not hit enough for me, so i made my own.
+The `rusqlite` crate is just not sufficient for me, so i made my own.
 
 ## Usage
 
@@ -17,26 +17,35 @@ struct Post {
 }
 
 fn main() -> rhosql::Result<()> {
-    let db = Connection::open_in_memory()?;
+    let mut db = Connection::open_in_memory()?;
 
     // execute single statement
-    rhosql::query("create table post(name)", &db).execute()?;
+    rhosql::query("create table post(name)", &mut db).execute()?;
 
-    let id = rhosql::query("insert into post(name) values(?1)", &db)
+    let id = rhosql::query("insert into post(name) values(?1)", &mut db)
         .bind("Control")
         .execute()?;
 
     // using custom struct
-    let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<Post>()?;
+    let posts = rhosql::query("select rowid,* from post", &mut db).fetch_all::<Post>()?;
 
     assert_eq!(posts[0].id as i64, id);
     assert_eq!(posts[0].name, "Control");
 
     // using tuple
-    let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<(i32, String)>()?;
+    let posts = rhosql::query("select rowid,* from post", &mut db).fetch_all::<(i32, String)>()?;
 
     assert_eq!(posts[0].0 as i64, id);
     assert_eq!(posts[0].1, "Control");
+
+    // iterator based
+    let mut posts = rhosql::query("select rowid,* from post", &mut db).fetch()?;
+
+    while let Some(post) = posts.next_row::<Post>()? {
+        assert_eq!(post.id as i64, id);
+        assert_eq!(post.name, "Control");
+    }
+
     Ok(())
 }
 ```

@@ -42,19 +42,19 @@ impl Statement for StatementRef<'_> {
 /// ```
 /// # fn main() -> rhosql::Result<()> {
 /// # use rhosql::Connection;
-/// # let db = Connection::open_in_memory()?;
+/// # let mut db = Connection::open_in_memory()?;
 /// #[derive(rhosql::FromRow)]
 /// struct Post {
 ///     id: i32,
 ///     name: String,
 /// }
 ///
-/// # rhosql::query("create table post(name)", &db).execute()?;
-/// rhosql::query("insert into post(name) values(?1)", &db)
+/// # rhosql::query("create table post(name)", &mut db).execute()?;
+/// rhosql::query("insert into post(name) values(?1)", &mut db)
 ///     .bind("Control")
 ///     .execute()?;
 ///
-/// let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<(i32, String)>()?;
+/// let posts = rhosql::query("select rowid,* from post", &mut db).fetch_all::<(i32, String)>()?;
 /// #   Ok(())
 /// # }
 /// ```
