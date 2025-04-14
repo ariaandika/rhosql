@@ -2,7 +2,6 @@
 use std::mem::{self, MaybeUninit};
 
 /// Stack allocated first in last out list
-#[derive(Debug)]
 pub struct Stack<T, const S: usize = 64> {
     items: [MaybeUninit<T>;S],
     len: usize,
@@ -114,6 +113,15 @@ impl<T, const S: usize> std::ops::Deref for Stack<T, S> {
 impl<T, const S: usize> std::ops::DerefMut for Stack<T, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut_slice()
+    }
+}
+
+impl<T: std::fmt::Debug, const S: usize> std::fmt::Debug for Stack<T, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Stack")
+            .field("items", &self.as_slice())
+            .field("len", &self.len)
+            .finish()
     }
 }
 

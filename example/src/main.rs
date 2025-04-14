@@ -1,4 +1,3 @@
-
 #[derive(Debug, PartialEq, Eq, rhosql::FromRow)]
 struct User {
     id: i32,
@@ -7,11 +6,11 @@ struct User {
 }
 
 fn main() {
-    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
-    basic().inspect_err(|e|log::error!("{e}")).ok();
-    low_level().inspect_err(|e|log::error!("{e}")).ok();
-    multithread_mutex().inspect_err(|e|log::error!("{e}")).ok();
-    query_api().inspect_err(|e|log::error!("{e}")).ok();
+    env_logger::init();
+    basic().unwrap();
+    low_level().unwrap();
+    multithread_mutex().unwrap();
+    query_api().unwrap();
 }
 
 fn basic() -> rhosql::Result<()> {

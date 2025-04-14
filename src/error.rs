@@ -6,7 +6,6 @@ use crate::sqlite::error::{
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug)]
 pub enum Error {
     /// an error when failed to open a database
     Open(OpenError),

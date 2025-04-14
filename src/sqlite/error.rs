@@ -26,6 +26,11 @@ macro_rules! display_error {
     }};
     ($self:ident $($tt:tt)*) => {
         impl std::error::Error for $self { }
+        impl std::fmt::Debug for $self {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Display::fmt(self, f)
+            }
+        }
         impl std::fmt::Display for $self {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 display_error!(@@ $self, self, f, $($tt)*);
@@ -80,7 +85,6 @@ macro_rules! opaque_error {
         $me:ident,
         #failedto $display:literal $(,)?
     ) => {
-        #[derive(Debug)]
         #[doc = concat!("An error when failed to ",$display)]
         pub struct $me(DatabaseError);
 
@@ -89,6 +93,11 @@ macro_rules! opaque_error {
         is_busy!($me, me => me.0.is_busy());
 
         impl std::error::Error for $me { }
+        impl std::fmt::Debug for $me {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Display::fmt(self, f)
+            }
+        }
         impl std::fmt::Display for $me {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "Failed to {}: {}", $display, self.0)
@@ -103,7 +112,6 @@ pub(crate) use from;
 pub(crate) use opaque_error;
 
 /// An error returned from database.
-#[derive(Debug)]
 pub struct DatabaseError {
     /// Error message via `sqlite3_errmsg()`.
     pub message: String,
@@ -126,9 +134,7 @@ impl DatabaseError {
 
         Self { message: msg, code: result }
     }
-}
 
-impl DatabaseError {
     /// Returns `true` if the error is a `SQLITE_BUSY`.
     ///
     /// `SQLITE_BUSY` occur when the database engine was unable to acquire the database locks it needs to do its job.
@@ -141,10 +147,25 @@ impl DatabaseError {
     }
 }
 
-display_error!(DatabaseError, me => write!("{}", me.message));
+impl std::error::Error for DatabaseError {}
+impl std::fmt::Debug for DatabaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::fmt::Display for DatabaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+// impl std::fmt::Debug for DatabaseError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_str(&self.message)
+//     }
+// }
 
 /// An error when failed to convert rust to sqlite string.
-#[derive(Debug)]
 pub enum StringError {
     /// String too large, sqlite max string is i32::MAX.
     TooLarge,
@@ -168,7 +189,6 @@ display_error! {
 }
 
 /// An error when failed to open a database connection
-#[derive(Debug)]
 pub enum OpenError {
     /// Sqlite is not in [Serialized][1] mode
     ///
@@ -208,7 +228,6 @@ opaque_error!(StepError, #failedto "get the next row");
 opaque_error!(ResetError, #failedto "reset or clear binding prepared statement");
 
 /// An error when failed to decode value
-#[derive(Debug)]
 pub enum BindError {
     String(StringError),
     Database(DatabaseError),
@@ -227,7 +246,6 @@ display_error! {
 }
 
 /// An error when failed to decode value
-#[derive(Debug)]
 pub enum DecodeError {
     IndexOutOfBounds,
     InvalidDataType,
