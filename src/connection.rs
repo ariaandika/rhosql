@@ -38,6 +38,11 @@ impl Connection {
         Self::open_with(path, <_>::default())
     }
 
+    /// Open in memory database.
+    pub fn open_in_memory() -> Result<Self> {
+        Self::open_with(c":memory:", <_>::default())
+    }
+
     /// Open a database connection with given flag.
     pub fn open_with<P: SqliteStr>(path: P, flags: OpenFlag) -> Result<Self> {
         if !crate::sqlite::is_threadsafe() {
