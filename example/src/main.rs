@@ -120,15 +120,35 @@ fn multithread_mutex() -> rhosql::Result<()> {
 }
 
 fn query_api() -> rhosql::Result<()> {
-    use rhosql::{query::query, Connection};
+    use rhosql::Connection;
 
-    let db = Connection::open(":memory:")?;
+    // derive macro
+    #[derive(rhosql::FromRow)]
+    struct Post {
+        id: i32,
+        name: String,
+    }
 
-    let rows = query(c"select 420,'userdata',?1", &db)
-        .bind("clip")
-        .fetch_all::<(i32,String,String)>()?;
+    let db = Connection::open_in_memory()?;
 
-    assert_eq!(rows[0], (420,"userdata".into(),"clip".into()));
+    // execute single statement
+    rhosql::query("create table post(name)", &db).execute()?;
+
+    let id = rhosql::query("insert into post(name) values(?1)", &db)
+        .bind("Control")
+        .execute()?;
+
+    // using custom struct
+    let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<Post>()?;
+
+    assert_eq!(posts[0].id as i64, id);
+    assert_eq!(posts[0].name, "Control");
+
+    // using tuple
+    let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<(i32, String)>()?;
+
+    assert_eq!(posts[0].0 as i64, id);
+    assert_eq!(posts[0].1, "Control");
 
     Ok(())
 }
