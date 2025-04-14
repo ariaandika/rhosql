@@ -1,15 +1,21 @@
 use crate::{
-    FromRow, Result, SqliteStr,
+    FromRow, Result, Row, SqliteStr,
     common::stack::Stack,
     row::ValueRef,
-    sqlite::{Database, StatementExt, StatementHandle},
+    sqlite::{Database, Statement, StatementExt, StatementHandle, StepResult},
 };
 
-pub trait Execute {
+pub trait Execute: Database {
     fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle>;
 }
 
 impl Execute for &crate::sqlite::SqliteHandle {
+    fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
+        StatementHandle::prepare_v2(self.as_ptr(), sql).map_err(Into::into)
+    }
+}
+
+impl Execute for &crate::Connection {
     fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
         StatementHandle::prepare_v2(self.as_ptr(), sql).map_err(Into::into)
     }
@@ -40,7 +46,7 @@ where
 {
     pub fn fetch_all<R: FromRow>(self) -> Result<Vec<R>> {
         let stmt = self.db.prepare(self.sql)?;
-        for (param,i) in self.params.iter().zip(0i32..) {
+        for (param,i) in self.params.iter().zip(1i32..) {
             match *param {
                 ValueRef::Null => stmt.bind_null(i)?,
                 ValueRef::Int(val) => stmt.bind_int(i, val)?,
@@ -49,13 +55,20 @@ where
                 ValueRef::Blob(val) => stmt.bind_blob(i, val)?,
             }
         }
-        // let mut rows = vec![];
-        let len = stmt.data_count();
-        for _i in 0..len {
-            // FromRow trait cannot be used with low level api
+
+        let mut rows = vec![];
+
+        loop {
+            match stmt.step()? {
+                StepResult::Row => {
+                    let row = Row::new((self.db.as_ptr(), stmt.as_stmt_ptr()));
+                    rows.push(R::from_row(row)?);
+                }
+                StepResult::Done => break,
+            }
         }
 
-        todo!()
+        Ok(rows)
     }
 }
 

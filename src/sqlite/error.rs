@@ -222,7 +222,7 @@ from! {
 
 display_error! {
     BindError,
-    #prefix "Failed to decode value: ",
+    #prefix "Failed to bind value: ",
     #delegate String Database
 }
 

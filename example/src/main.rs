@@ -1,3 +1,4 @@
+
 #[derive(Debug, PartialEq, Eq, rhosql::FromRow)]
 struct User {
     id: i32,
@@ -10,6 +11,7 @@ fn main() {
     basic().inspect_err(|e|log::error!("{e}")).ok();
     low_level().inspect_err(|e|log::error!("{e}")).ok();
     multithread_mutex().inspect_err(|e|log::error!("{e}")).ok();
+    query_api().inspect_err(|e|log::error!("{e}")).ok();
 }
 
 fn basic() -> rhosql::Result<()> {
@@ -114,6 +116,20 @@ fn multithread_mutex() -> rhosql::Result<()> {
         }
         assert!(rows.next()?.is_none())
     }
+
+    Ok(())
+}
+
+fn query_api() -> rhosql::Result<()> {
+    use rhosql::{query::query, Connection};
+
+    let db = Connection::open(":memory:")?;
+
+    let rows = query(c"select 420,'userdata',?1", &db)
+        .bind("clip")
+        .fetch_all::<(i32,String,String)>()?;
+
+    assert_eq!(rows[0], (420,"userdata".into(),"clip".into()));
 
     Ok(())
 }
