@@ -1,9 +1,9 @@
 //! Types for query api.
 
 use crate::{
-    FromRow, Result, Row, SqliteStr,
+    FromRow, Result, Row, SqliteStr, ValueRef,
     common::stack::Stack,
-    row::ValueRef,
+    row_stream::RowStream,
     sqlite::{
         Database, DatabaseExt, SqliteHandle, Statement, StatementExt, StatementHandle, StepResult,
     },
@@ -105,7 +105,7 @@ where
         Ok(rows)
     }
 
-    /// Retrieve one row optionally.
+    /// Optionally retrieve one row.
     pub fn fetch_optional<R: FromRow>(self) -> Result<Option<R>> {
         let stmt = self.db.prepare(self.sql)?;
 
@@ -120,6 +120,17 @@ where
             }
             StepResult::Done => Ok(None),
         }
+    }
+
+    /// Retrieve row by [`Iterator`]
+    pub fn fetch(self) -> Result<RowStream<'s>> {
+        let stmt = self.db.prepare(self.sql)?;
+
+        for (param,idx) in self.params.into_iter().zip(1i32..) {
+            param.bind(idx, &stmt)?;
+        }
+
+        Ok(RowStream::new(stmt.as_stmt_ptr()))
     }
 
     /// Execute statement and return value of `last_insert_rowid`.

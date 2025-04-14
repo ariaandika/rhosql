@@ -2,11 +2,8 @@ use std::marker::PhantomData;
 
 use crate::{
     FromRow, Result,
-    row::{Row, ValueRef},
-    sqlite::{
-        Statement, StatementExt, StatementHandle,
-        error::{BindError, StepError},
-    },
+    row::Row,
+    sqlite::{StatementExt, error::StepError},
 };
 
 /// Bounded prepared statement and ready for iteration.
@@ -18,21 +15,13 @@ pub struct RowStream<'stmt> {
 }
 
 impl RowStream<'_> {
-    pub(crate) fn bind<'input, R: IntoIterator<Item = ValueRef<'input>>>(
-        stmt: &StatementHandle,
-        args: R,
-    ) -> Result<Self, BindError> {
-        let me = Self {
-            handle: stmt.as_stmt_ptr(),
+    /// the statement parameter should already bound and ready to step.
+    pub(crate) fn new(handle: *mut libsqlite3_sys::sqlite3_stmt) -> Self {
+        Self {
+            handle,
             done: false,
             _p: PhantomData,
-        };
-
-        for (i, value) in (1i32..).zip(args) {
-            value.bind(i, &me.handle)?;
         }
-
-        Ok(me)
     }
 
     /// fetch the next row

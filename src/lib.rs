@@ -45,23 +45,27 @@ mod common;
 // low level api
 pub mod sqlite;
 
-// high level api
+// query api
+pub mod query;
+
+// shared state
 mod connection;
+mod pool;
+
+// subtypes
 mod row_stream;
 mod row;
 
 // error
 pub mod error;
 
-// utility api
-mod pool;
-pub mod query;
 
 // reexports
 pub use common::SqliteStr;
-pub use connection::Connection;
-pub use row::{Decode, FromRow, Row, ValueRef};
 pub use query::query;
-pub use error::{Result, Error};
+pub use connection::Connection;
+pub use row_stream::RowStream;
+pub use row::{Decode, FromRow, Row, ValueRef};
 pub use rhosql_macros::FromRow;
+pub use error::{Result, Error};
 
