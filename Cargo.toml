@@ -18,7 +18,7 @@ members = [ "example","rhosql-macros"]
 libsqlite3-sys = "0.32.0"
 log = { version = "0.4.27", optional = true }
 lru = { version = "0.13.0", default-features = false }
-rhosql-macros = { version = "0.1.0", path = "rhosql-macros" }
+rhosql-macros = { version = "0.1.0", path = "./rhosql-macros" }
 
 [features]
 bundled = ["libsqlite3-sys/bundled"]
