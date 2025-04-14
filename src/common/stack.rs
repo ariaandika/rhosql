@@ -99,7 +99,7 @@ impl<T, const S: usize> IntoIterator for Stack<T,S> {
         // prevent `Drop` deallocating
         self.len = 0;
 
-        IntoIter { items, initial_size: len, len }
+        IntoIter { items, len }
     }
 }
 
@@ -123,7 +123,6 @@ impl<T, const S: usize> std::ops::DerefMut for Stack<T, S> {
 /// The order of returned items is back to front
 pub struct IntoIter<T, const S: usize> {
     items: [MaybeUninit<T>;S],
-    initial_size: usize,
     len: usize,
 }
 
@@ -145,7 +144,7 @@ impl<T, const S: usize> Iterator for IntoIter<T, S> {
             return None;
         }
         self.len -= 1;
-        let item = mem::replace(&mut self.items[self.initial_size], MaybeUninit::uninit());
+        let item = mem::replace(&mut self.items[self.len], MaybeUninit::uninit());
         Some(unsafe { item.assume_init() })
     }
 
