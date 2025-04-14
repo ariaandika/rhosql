@@ -1,14 +1,10 @@
-# SQLite Driver
+# Rhosql
 
-The existing `rusqlite` crate is just not sufficient for me, so i made my own.
+Adequate SQLite driver.
 
-This driver provide:
+The `rusqlite` crate is just not hit enough for me, so i made my own.
 
-- prepared statement lru caching
-- `FromRow` derive trait
-- connection sharing / pooling (WIP)
-
-# Usage
+## Usage
 
 ```rust
 use rhosql::Connection;
@@ -45,7 +41,6 @@ fn main() -> rhosql::Result<()> {
 }
 ```
 
-# Versioning
-
-Currently this library does not follow semver, its api still changing.
+## License
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
