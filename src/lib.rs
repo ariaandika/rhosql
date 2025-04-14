@@ -1,6 +1,6 @@
 //! # Rhosql
 //!
-//! SQLite driver.
+//! Simple SQLite driver.
 //!
 //! The existing `rusqlite` crate is just not sufficient for me, so i made my own.
 //!
@@ -67,12 +67,14 @@ mod row_stream;
 mod row;
 
 // error
-pub mod error;
+mod error;
 
 
 // reexports
-pub use common::SqliteStr;
+#[doc(inline)]
 pub use query::query;
+
+pub use common::SqliteStr;
 pub use connection::Connection;
 pub use row_stream::RowStream;
 pub use row::{Decode, FromRow, Row, ValueRef};

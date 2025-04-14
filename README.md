@@ -1,6 +1,6 @@
 # Rhosql
 
-SQLite driver.
+Simple SQLite driver.
 
 The `rusqlite` crate is just not sufficient for me, so i made my own.
 

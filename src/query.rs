@@ -59,7 +59,7 @@ impl Statement for StatementRef<'_> {
 /// # }
 /// ```
 ///
-/// Note that parameter `bind` have hard limit of 16.
+/// Note that parameter [`bind`][Query::bind] have hard limit of 16.
 pub fn query<'a, 's, S: SqliteStr, E: Execute<'s>>(sql: S, db: E) -> Query<'a, S, E> {
     Query { db, sql, params: Stack::with_size() }
 }
@@ -75,7 +75,7 @@ pub struct Query<'a, S, E> {
 impl<'a, S, E> Query<'a, S, E> {
     /// Bind a parameter.
     ///
-    /// Note that parameter `bind` have hard limit of 16.
+    /// Note that parameter binding have hard limit of 16.
     pub fn bind<V: Into<ValueRef<'a>>>(mut self, value: V) -> Self {
         self.params.push(value.into());
         self
