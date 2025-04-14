@@ -1,24 +1,20 @@
 use lru::LruCache;
 use std::{
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{DefaultHasher, Hasher},
     num::NonZeroUsize,
 };
 
 use crate::{
     Result,
     common::SqliteStr,
-    row::ValueRef,
-    sqlite::{
-        Database, DatabaseExt, OpenFlag, SqliteHandle,
-        error::{OpenError, PrepareError},
-    },
-    statement::Statement,
+    query::{Execute, StatementRef},
+    sqlite::{Database, DatabaseExt, OpenFlag, SqliteHandle, StatementHandle, error::OpenError},
 };
 
 /// Database connection.
 #[derive(Debug)]
 pub struct Connection {
-    stmts: LruCache<u64, Statement>,
+    stmts: LruCache<u64, StatementHandle>,
     handle: SqliteHandle,
 }
 
@@ -60,31 +56,19 @@ impl Connection {
             stmts: LruCache::new(NonZeroUsize::new(24).unwrap()),
         })
     }
+}
 
-    /// Create a prepared statement.
-    ///
-    /// Prepared statement is cached internally.
-    pub fn prepare<S: SqliteStr + Hash>(&mut self, sql: S) -> Result<&mut Statement, PrepareError> {
+impl<'s> Execute<'s> for &'s mut Connection {
+    fn prepare<S: SqliteStr>(self, sql: S) -> Result<StatementRef<'s>> {
         let mut hash = DefaultHasher::new();
         sql.hash(&mut hash);
         let key = hash.finish();
 
-        self.stmts
-            .try_get_or_insert_mut(key, || Statement::prepare(self.handle.as_ptr(), sql))
-    }
+        let stmt = self.stmts.try_get_or_insert(key, || {
+            StatementHandle::prepare_v2(self.handle.as_ptr(), sql)
+        })?;
 
-    /// Execute a single statement.
-    ///
-    /// Prepared statement is cached internally.
-    pub fn exec<'a, S: SqliteStr + Hash, R: IntoIterator<Item = ValueRef<'a>>>(
-        &mut self,
-        sql: S,
-        args: R,
-    ) -> Result<()> {
-        let stmt = self.prepare(sql)?;
-        let mut rows = stmt.bind(args)?;
-        while rows.next()?.is_some() {}
-        Ok(())
+        Ok(StatementRef::Borrow(stmt))
     }
 }
 

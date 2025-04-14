@@ -4,23 +4,34 @@ use crate::{
     FromRow, Result, Row, SqliteStr,
     common::stack::Stack,
     row::ValueRef,
-    sqlite::{Database, Statement, StatementExt, StatementHandle, StepResult},
+    sqlite::{
+        Database, DatabaseExt, SqliteHandle, Statement, StatementExt, StatementHandle, StepResult,
+    },
 };
 
 /// An executor which used in `query` api.
-pub trait Execute: Database {
-    fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle>;
+pub trait Execute<'s>: Database {
+    fn prepare<S: SqliteStr>(self, sql: S) -> Result<StatementRef<'s>>;
 }
 
-impl Execute for &crate::sqlite::SqliteHandle {
-    fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
-        StatementHandle::prepare_v2(self.as_ptr(), sql).map_err(Into::into)
+impl<'s> Execute<'s> for &'s mut SqliteHandle {
+    fn prepare<S: SqliteStr>(self, sql: S) -> Result<StatementRef<'s>> {
+        Ok(StatementRef::Owned(StatementHandle::prepare_v2(self.as_ptr(), sql)?))
     }
 }
 
-impl Execute for &crate::Connection {
-    fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle> {
-        StatementHandle::prepare_v2(self.as_ptr(), sql).map_err(Into::into)
+/// Either borrowed or owned prepared statement.
+pub enum StatementRef<'a> {
+    Borrow(&'a StatementHandle),
+    Owned(StatementHandle),
+}
+
+impl Statement for StatementRef<'_> {
+    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+        match self {
+            StatementRef::Borrow(s) => s.as_stmt_ptr(),
+            StatementRef::Owned(s) => s.as_stmt_ptr(),
+        }
     }
 }
 
@@ -49,7 +60,7 @@ impl Execute for &crate::Connection {
 /// ```
 ///
 /// Note that parameter `bind` have hard limit of 16.
-pub fn query<'a, S: SqliteStr, E: Execute>(sql: S, db: E) -> Query<'a, S, E> {
+pub fn query<'a, 's, S: SqliteStr, E: Execute<'s>>(sql: S, db: E) -> Query<'a, S, E> {
     Query { db, sql, params: Stack::with_size() }
 }
 
@@ -71,10 +82,10 @@ impl<'a, S, E> Query<'a, S, E> {
     }
 }
 
-impl<S, E> Query<'_, S, E>
+impl<'s, S, E> Query<'_, S, E>
 where
     S: SqliteStr,
-    E: Execute
+    E: Execute<'s>
 {
     /// Collect result rows to a vector.
     pub fn fetch_all<R: FromRow>(self) -> Result<Vec<R>> {
@@ -111,9 +122,9 @@ where
         }
     }
 
-    /// Execute statement and return value of `last_insert_rowid`
+    /// Execute statement and return value of `last_insert_rowid`.
     pub fn execute(self) -> Result<i64> {
-        use crate::sqlite::DatabaseExt;
+        let db = self.db.as_ptr();
         let stmt = self.db.prepare(self.sql)?;
 
         for (param,idx) in self.params.into_iter().zip(1i32..) {
@@ -122,7 +133,7 @@ where
 
         stmt.step()?;
 
-        Ok(self.db.as_ptr().last_insert_rowid())
+        Ok(db.last_insert_rowid())
     }
 }
 

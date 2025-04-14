@@ -1,9 +1,11 @@
 use std::marker::PhantomData;
 
 use crate::{
+    Result,
     sqlite::{
-        error::{BindError, DecodeError}, DataType, Statement, StatementExt
-    }, Result
+        DataType, Statement, StatementExt,
+        error::{BindError, DecodeError},
+    },
 };
 
 /// Row buffer.
@@ -87,6 +89,12 @@ impl ValueRef<'_> {
             DataType::Blob => ValueRef::Blob(handle.column_blob(idx)),
         };
         Ok(value)
+    }
+}
+
+impl<'a> ValueRef<'a> {
+    pub fn try_decode<D: Decode<'a>>(&self) -> Result<D> {
+        D::decode(*self)
     }
 }
 
@@ -184,12 +192,6 @@ decode!(f64, ValueRef::Float(i) => i);
 decode!(&str as String);
 decode!(&[u8] as Vec<u8>);
 
-impl<'a> ValueRef<'a> {
-    pub fn try_decode<D: Decode<'a>>(&self) -> Result<D> {
-        D::decode(*self)
-    }
-}
-
 
 /// A type that can be construced from sqlite row.
 pub trait FromRow: Sized {
@@ -218,3 +220,4 @@ from_tuple!(R1 0,R2 1,R3 2,R4 3);
 from_tuple!(R1 0,R2 1,R3 2,R4 3,R5 4);
 from_tuple!(R1 0,R2 1,R3 2,R4 3,R5 4,R6 5);
 from_tuple!(R1 0,R2 1,R3 2,R4 3,R5 4,R6 5,R7 6);
+

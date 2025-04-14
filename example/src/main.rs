@@ -7,46 +7,40 @@ struct User {
 
 fn main() {
     env_logger::init();
-    basic().unwrap();
-    low_level().unwrap();
-    multithread_mutex().unwrap();
     query_api().unwrap();
+    low_level().unwrap();
 }
 
-fn basic() -> rhosql::Result<()> {
-    use rhosql::sqlite::DatabaseExt;
-    use rhosql::{Connection, ValueRef};
+fn query_api() -> rhosql::Result<()> {
+    use rhosql::Connection;
 
-    let mut db = Connection::open(":memory:")?;
-    let name = "john".to_string();
-
-    db.exec("create table users(name)",[])?;
-    db.exec(
-        "insert into users(name) values(?1)",
-        [ValueRef::Text(&name)],
-    )?;
-
-    let id = db.last_insert_rowid() as _;
-
-    let stmt = db.prepare("select rowid,name,?1 from users")?;
-
-    // scoped for `rows` drop and reset statement
-    {
-        let item = "Deez".to_string();
-        let mut rows = stmt.bind([ValueRef::Text(&item)])?;
-        assert_eq!(rows.next_row()?, Some(User { id, name: name.clone(), item }));
-        assert_eq!(rows.next_row::<User>()?, None);
+    // derive macro
+    #[derive(rhosql::FromRow)]
+    struct Post {
+        id: i32,
+        name: String,
     }
 
-    // cached
-    let stmt = db.prepare("select rowid,name,?1 from users")?;
+    let mut db = Connection::open_in_memory()?;
 
-    {
-        let item = "Cloak".to_string();
-        let mut rows = stmt.bind([ValueRef::Text(&item)])?;
-        assert_eq!(rows.next_row()?, Some(User { id, name: name.clone(), item }));
-        assert_eq!(rows.next_row::<User>()?, None);
-    }
+    // execute single statement
+    rhosql::query("create table post(name)", &mut db).execute()?;
+
+    let id = rhosql::query("insert into post(name) values(?1)", &mut db)
+        .bind("Control")
+        .execute()?;
+
+    // using custom struct
+    let posts = rhosql::query("select rowid,* from post", &mut db).fetch_all::<Post>()?;
+
+    assert_eq!(posts[0].id as i64, id);
+    assert_eq!(posts[0].name, "Control");
+
+    // using tuple
+    let posts = rhosql::query("select rowid,* from post", &mut db).fetch_all::<(i32, String)>()?;
+
+    assert_eq!(posts[0].0 as i64, id);
+    assert_eq!(posts[0].1, "Control");
 
     Ok(())
 }
@@ -75,80 +69,6 @@ fn low_level() -> rhosql::Result<()> {
     assert_eq!(stmt.column_text(2)?, "GG");
 
     assert_eq!(stmt.step()?, StepResult::Done);
-
-    Ok(())
-}
-
-fn multithread_mutex() -> rhosql::Result<()> {
-    use std::{sync::{Arc, Mutex}, thread};
-    use rhosql::Connection;
-
-    let db = Arc::new(Mutex::new(Connection::open(":memory:")?));
-
-    fn call(db: Arc<Mutex<Connection>>) -> Result<(), rhosql::Error> {
-        let mut lock = db.lock().unwrap();
-        lock.exec(c"create table if not exists foo(a)", [])?;
-        lock.exec(c"insert into foo(a) values('deez')", [])?;
-        Ok(())
-    }
-
-    let db1 = db.clone();
-    let db2 = db.clone();
-    let t1 = thread::spawn(move||call(db1));
-    let t2 = thread::spawn(move||call(db2));
-    t1.join().unwrap()?;
-    t2.join().unwrap()?;
-
-    {
-        let mut lock = db.lock().unwrap();
-        let stmt = lock.prepare(c"select rowid from foo")?;
-        let mut rows = stmt.bind([])?;
-        {
-            let row = rows.next()?.unwrap();
-            let (value,) = row.try_row::<(i32,)>()?;
-            assert_eq!(value, 1);
-        }
-        {
-            let row = rows.next()?.unwrap();
-            let value = row.try_column(0)?.try_decode::<i32>()?;
-            assert_eq!(value, 2);
-        }
-        assert!(rows.next()?.is_none())
-    }
-
-    Ok(())
-}
-
-fn query_api() -> rhosql::Result<()> {
-    use rhosql::Connection;
-
-    // derive macro
-    #[derive(rhosql::FromRow)]
-    struct Post {
-        id: i32,
-        name: String,
-    }
-
-    let db = Connection::open_in_memory()?;
-
-    // execute single statement
-    rhosql::query("create table post(name)", &db).execute()?;
-
-    let id = rhosql::query("insert into post(name) values(?1)", &db)
-        .bind("Control")
-        .execute()?;
-
-    // using custom struct
-    let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<Post>()?;
-
-    assert_eq!(posts[0].id as i64, id);
-    assert_eq!(posts[0].name, "Control");
-
-    // using tuple
-    let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<(i32, String)>()?;
-
-    assert_eq!(posts[0].0 as i64, id);
-    assert_eq!(posts[0].1, "Control");
 
     Ok(())
 }

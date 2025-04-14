@@ -47,7 +47,6 @@ pub mod sqlite;
 
 // high level api
 mod connection;
-mod statement;
 mod row_stream;
 mod row;
 
@@ -61,8 +60,7 @@ pub mod query;
 // reexports
 pub use common::SqliteStr;
 pub use connection::Connection;
-pub use statement::Statement;
-pub use row::{Row, ValueRef, Decode, FromRow};
+pub use row::{Decode, FromRow, Row, ValueRef};
 pub use query::query;
 pub use error::{Result, Error};
 pub use rhosql_macros::FromRow;

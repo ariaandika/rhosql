@@ -26,7 +26,7 @@ pub(crate) mod sealed {
 /// - `CStr` and `CString` without runtime check nor allocation for `to_nul_string`
 ///
 /// so its could have performance improvement querying with cstr, `c"SELECT * FROM users"`
-pub trait SqliteStr: sealed::Sealed + std::fmt::Debug {
+pub trait SqliteStr: sealed::Sealed + std::fmt::Debug + std::hash::Hash {
     /// destructor string to pointer, nul terminator *excluded* length, and a sqlite destructor
     fn as_sqlite_str(&self) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type), StringError>;
 
