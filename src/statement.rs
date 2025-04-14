@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-/// sql prepared statement
+/// Prepared statement.
 #[derive(Debug)]
 pub struct Statement {
     handle: StatementHandle,

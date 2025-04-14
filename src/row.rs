@@ -6,7 +6,7 @@ use crate::{
     }, Result
 };
 
-/// unencoded row buffer
+/// Row buffer.
 #[derive(Debug)]
 pub struct Row<'row> {
     handle: *mut libsqlite3_sys::sqlite3_stmt,
@@ -53,6 +53,7 @@ impl Row<'_> {
     }
 }
 
+/// A borrowed sqlite value.
 #[derive(Debug)]
 pub enum ValueRef<'a> {
     Null,
@@ -154,6 +155,7 @@ macro_rules! decode {
     };
 }
 
+/// A type that can be construced from sqlite value.
 pub trait Decode<'a>: Sized {
     fn decode(value: ValueRef<'a>) -> Result<Self>;
 }
@@ -189,7 +191,7 @@ impl<'a> ValueRef<'a> {
 }
 
 
-
+/// A type that can be construced from sqlite row.
 pub trait FromRow: Sized {
     fn from_row(row: Row) -> Result<Self>;
 }

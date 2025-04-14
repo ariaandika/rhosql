@@ -56,16 +56,14 @@ pub mod error;
 
 // utility api
 mod pool;
-mod query;
-
+pub mod query;
 
 // reexports
-
 pub use common::SqliteStr;
 pub use connection::Connection;
 pub use statement::Statement;
 pub use row::{Row, ValueRef, Decode, FromRow};
-pub use query::{query, Query};
+pub use query::query;
 pub use error::{Result, Error};
 pub use rhosql_macros::FromRow;
 

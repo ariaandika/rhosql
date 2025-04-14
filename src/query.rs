@@ -1,3 +1,5 @@
+//! Types for query api.
+
 use crate::{
     FromRow, Result, Row, SqliteStr,
     common::stack::Stack,
@@ -5,6 +7,7 @@ use crate::{
     sqlite::{Database, Statement, StatementExt, StatementHandle, StepResult},
 };
 
+/// An executor which used in `query` api.
 pub trait Execute: Database {
     fn prepare<S: SqliteStr>(&self, sql: S) -> Result<StatementHandle>;
 }
@@ -23,11 +26,34 @@ impl Execute for &crate::Connection {
 
 /// Query api.
 ///
-/// Note that currently parameter `bind` have hard limit of 16.
+/// # Example
+///
+/// ```
+/// # fn main() -> rhosql::Result<()> {
+/// # use rhosql::Connection;
+/// # let db = Connection::open_in_memory()?;
+/// #[derive(rhosql::FromRow)]
+/// struct Post {
+///     id: i32,
+///     name: String,
+/// }
+///
+/// # rhosql::query("create table post(name)", &db).execute()?;
+/// rhosql::query("insert into post(name) values(?1)", &db)
+///     .bind("Control")
+///     .execute()?;
+///
+/// let posts = rhosql::query("select rowid,* from post", &db).fetch_all::<(i32, String)>()?;
+/// #   Ok(())
+/// # }
+/// ```
+///
+/// Note that parameter `bind` have hard limit of 16.
 pub fn query<'a, S: SqliteStr, E: Execute>(sql: S, db: E) -> Query<'a, S, E> {
     Query { db, sql, params: Stack::with_size() }
 }
 
+/// Query api created by [`query`]
 #[derive(Debug)]
 pub struct Query<'a, S, E> {
     db: E,
@@ -38,7 +64,7 @@ pub struct Query<'a, S, E> {
 impl<'a, S, E> Query<'a, S, E> {
     /// Bind a parameter.
     ///
-    /// Note that currently parameter `bind` have hard limit of 16.
+    /// Note that parameter `bind` have hard limit of 16.
     pub fn bind<V: Into<ValueRef<'a>>>(mut self, value: V) -> Self {
         self.params.push(value.into());
         self

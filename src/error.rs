@@ -1,11 +1,13 @@
-//! an error which can occur in sqlite operation
+//! An error which can occur in sqlite operation.
 use crate::sqlite::error::{
     BindError, ConfigureError, DecodeError, OpenError, PrepareError, ResetError, StepError,
     display_error, from,
 };
 
+/// Represent success or error for sqlite operation.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// An error which can occur in sqlite operation.
 pub enum Error {
     /// an error when failed to open a database
     Open(OpenError),
