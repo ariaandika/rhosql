@@ -1,11 +1,9 @@
 use std::marker::PhantomData;
 
 use crate::{
-    Result,
     sqlite::{
-        DataType, StatementExt,
-        error::{BindError, DecodeError},
-    },
+        error::{BindError, DecodeError}, DataType, Statement, StatementExt
+    }, Result
 };
 
 /// unencoded row buffer
@@ -65,7 +63,10 @@ pub enum ValueRef<'a> {
 }
 
 impl ValueRef<'_> {
-    pub fn bind<S: StatementExt>(&self, idx: i32, handle: S) -> Result<(), BindError> {
+    /// Bind current value to parameter at given index.
+    ///
+    /// Note that parameter index is one based.
+    pub fn bind<S: Statement>(&self, idx: i32, handle: S) -> Result<(), BindError> {
         match *self {
             ValueRef::Null => handle.bind_null(idx)?,
             ValueRef::Int(int) => handle.bind_int(idx, int)?,
@@ -76,7 +77,7 @@ impl ValueRef<'_> {
         Ok(())
     }
 
-    pub fn decode<S: StatementExt>(idx: i32, handle: &S) -> Result<ValueRef<'_>, DecodeError> {
+    pub fn decode<S: Statement>(idx: i32, handle: &S) -> Result<ValueRef<'_>, DecodeError> {
         let value = match handle.column_type(idx) {
             DataType::Null => ValueRef::Null,
             DataType::Int => ValueRef::Int(handle.column_int(idx)),

@@ -21,6 +21,9 @@ impl Execute for &crate::Connection {
     }
 }
 
+/// Query api.
+///
+/// Note that currently parameter `bind` have hard limit of 16.
 pub fn query<'a, S: SqliteStr, E: Execute>(sql: S, db: E) -> Query<'a, S, E> {
     Query { db, sql, params: Stack::with_size() }
 }
@@ -33,42 +36,55 @@ pub struct Query<'a, S, E> {
 }
 
 impl<'a, S, E> Query<'a, S, E> {
+    /// Bind a parameter.
+    ///
+    /// Note that currently parameter `bind` have hard limit of 16.
     pub fn bind<V: Into<ValueRef<'a>>>(mut self, value: V) -> Self {
         self.params.push(value.into());
         self
     }
 }
 
-impl<'a, S, E> Query<'a, S, E>
+impl<S, E> Query<'_, S, E>
 where
     S: SqliteStr,
     E: Execute
 {
+    /// Collect result rows to a vector.
     pub fn fetch_all<R: FromRow>(self) -> Result<Vec<R>> {
         let stmt = self.db.prepare(self.sql)?;
-        for (param,i) in self.params.iter().zip(1i32..) {
-            match *param {
-                ValueRef::Null => stmt.bind_null(i)?,
-                ValueRef::Int(val) => stmt.bind_int(i, val)?,
-                ValueRef::Float(val) => stmt.bind_double(i, val)?,
-                ValueRef::Text(val) => stmt.bind_text(i, val)?,
-                ValueRef::Blob(val) => stmt.bind_blob(i, val)?,
-            }
+
+        for (param,idx) in self.params.into_iter().zip(1i32..) {
+            param.bind(idx, &stmt)?;
         }
 
         let mut rows = vec![];
 
-        loop {
-            match stmt.step()? {
-                StepResult::Row => {
-                    let row = Row::new(stmt.as_stmt_ptr());
-                    rows.push(R::from_row(row)?);
-                }
-                StepResult::Done => break,
-            }
+        while stmt.step()?.is_row() {
+            let row = Row::new(stmt.as_stmt_ptr());
+            rows.push(R::from_row(row)?);
         }
 
         Ok(rows)
+    }
+
+    /// Collect one row optionally.
+    pub fn fetch_optional<R: FromRow>(self) -> Result<Option<R>> {
+        let stmt = self.db.prepare(self.sql)?;
+
+        for (param,idx) in self.params.into_iter().zip(1i32..) {
+            param.bind(idx, &stmt)?;
+        }
+
+        let row = match stmt.step()? {
+            StepResult::Row => {
+                let row = Row::new(stmt.as_stmt_ptr());
+                Some(R::from_row(row)?)
+            }
+            StepResult::Done => None,
+        };
+
+        Ok(row)
     }
 }
 
