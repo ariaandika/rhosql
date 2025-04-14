@@ -37,10 +37,19 @@ fn query_api() -> rhosql::Result<()> {
     assert_eq!(posts[0].name, "Control");
 
     // using tuple
+    // also, prepared statement is cached
     let posts = rhosql::query("select rowid,* from post", &mut db).fetch_all::<(i32, String)>()?;
 
     assert_eq!(posts[0].0 as i64, id);
     assert_eq!(posts[0].1, "Control");
+
+    // iterator based
+    let mut posts = rhosql::query("select rowid,* from post", &mut db).fetch()?;
+
+    while let Some(post) = posts.next_row::<Post>()? {
+        assert_eq!(post.id as i64, id);
+        assert_eq!(post.name, "Control");
+    }
 
     Ok(())
 }
