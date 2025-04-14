@@ -104,7 +104,7 @@ fn multithread_mutex() -> rhosql::Result<()> {
         let mut rows = stmt.bind([])?;
         {
             let row = rows.next()?.unwrap();
-            let value = row.try_column(0)?.try_decode::<i32>()?;
+            let (value,) = row.try_row::<(i32,)>()?;
             assert_eq!(value, 1);
         }
         {
