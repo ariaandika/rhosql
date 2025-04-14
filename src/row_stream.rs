@@ -17,7 +17,7 @@ pub struct RowStream<'stmt> {
     _p: PhantomData<&'stmt mut ()>,
 }
 
-impl<'stmt> RowStream<'stmt> {
+impl RowStream<'_> {
     pub(crate) fn bind<'input, R: IntoIterator<Item = ValueRef<'input>>>(
         stmt: &StatementHandle,
         args: R,
@@ -36,7 +36,7 @@ impl<'stmt> RowStream<'stmt> {
     }
 
     /// fetch the next row
-    pub fn next<'me>(&'me mut self) -> Result<Option<Row<'me>>, StepError> {
+    pub fn next(&mut self) -> Result<Option<Row<'_>>, StepError> {
         if self.done {
             return Ok(None);
         }

@@ -12,11 +12,10 @@ mod common;
 pub mod sqlite;
 
 // high level api
-pub mod connection;
-pub mod statement;
-pub mod row_stream;
-pub mod row;
-pub mod from_row;
+mod connection;
+mod statement;
+mod row_stream;
+mod row;
 
 // error
 pub mod error;
@@ -26,13 +25,12 @@ mod pool;
 pub mod query;
 
 
-
 // reexports
 
 pub use common::SqliteStr;
 pub use connection::Connection;
-pub use row::{Row, ValueRef};
-pub use from_row::FromRow;
+pub use statement::Statement;
+pub use row::{Row, ValueRef, Decode, FromRow};
 pub use error::{Result, Error};
 pub use rhosql_macros::FromRow;
 

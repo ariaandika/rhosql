@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 use crate::{
     Result,
-    from_row::FromRow,
     sqlite::{
         DataType, StatementExt,
         error::{BindError, DecodeError},
@@ -17,7 +16,7 @@ pub struct Row<'row> {
     _p: PhantomData<&'row mut ()>,
 }
 
-impl<'row> Row<'row> {
+impl Row<'_> {
     pub fn new(handle: *mut libsqlite3_sys::sqlite3_stmt) -> Self {
         Self {
             col_count: handle.data_count(),
@@ -65,7 +64,7 @@ pub enum ValueRef<'a> {
     Blob(&'a [u8]),
 }
 
-impl<'a> ValueRef<'a> {
+impl ValueRef<'_> {
     pub fn bind<S: StatementExt>(&self, idx: i32, handle: S) -> Result<(), BindError> {
         match *self {
             ValueRef::Null => handle.bind_null(idx)?,
@@ -188,3 +187,31 @@ impl<'a> ValueRef<'a> {
     }
 }
 
+
+
+pub trait FromRow: Sized {
+    fn from_row(row: Row) -> Result<Self>;
+}
+
+macro_rules! from_tuple {
+    ($($id:ident $i:literal),*) => {
+        impl<$($id),*> FromRow for ($($id),*,)
+        where
+            $($id: for<'a> Decode<'a>),*
+        {
+            fn from_row(row: Row) -> Result<Self> {
+                Ok((
+                    $(row.try_column($i)?.try_decode::<$id>()?),*,
+                ))
+            }
+        }
+    };
+}
+
+from_tuple!(R1 0);
+from_tuple!(R1 0,R2 1);
+from_tuple!(R1 0,R2 1,R3 2);
+from_tuple!(R1 0,R2 1,R3 2,R4 3);
+from_tuple!(R1 0,R2 1,R3 2,R4 3,R5 4);
+from_tuple!(R1 0,R2 1,R3 2,R4 3,R5 4,R6 5);
+from_tuple!(R1 0,R2 1,R3 2,R4 3,R5 4,R6 5,R7 6);
