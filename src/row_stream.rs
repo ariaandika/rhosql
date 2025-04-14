@@ -4,7 +4,7 @@ use crate::{
     FromRow, Result,
     row::{Row, ValueRef},
     sqlite::{
-        Database, Statement, StatementExt, StatementHandle,
+        Statement, StatementExt, StatementHandle,
         error::{BindError, StepError},
     },
 };
@@ -12,10 +12,7 @@ use crate::{
 /// Bounded prepared statement and ready for iteration.
 #[derive(Debug)]
 pub struct RowStream<'stmt> {
-    handle: (
-        *mut libsqlite3_sys::sqlite3,
-        *mut libsqlite3_sys::sqlite3_stmt,
-    ),
+    handle: *mut libsqlite3_sys::sqlite3_stmt,
     done: bool,
     _p: PhantomData<&'stmt mut ()>,
 }
@@ -26,7 +23,7 @@ impl<'stmt> RowStream<'stmt> {
         args: R,
     ) -> Result<Self, BindError> {
         let me = Self {
-            handle: (stmt.as_ptr(), stmt.as_stmt_ptr()),
+            handle: stmt.as_stmt_ptr(),
             done: false,
             _p: PhantomData,
         };

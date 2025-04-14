@@ -2,7 +2,7 @@ use libsqlite3_sys::{self as ffi};
 use std::ptr;
 
 use super::{
-    DataType, Database, DatabaseError, StepResult,
+    DataType, DatabaseError, StepResult,
     database::ffi_db,
     error::{BindError, DecodeError, PrepareError, ResetError, StepError},
 };
@@ -64,54 +64,41 @@ pub trait Statement {
     fn as_stmt_ptr(&self) -> *mut ffi::sqlite3_stmt;
 }
 
-impl<S> Statement for &mut S where S: Statement {
-    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
-        S::as_stmt_ptr(self)
-    }
-}
-
 impl<S> Statement for &S where S: Statement {
-    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+    fn as_stmt_ptr(&self) -> *mut ffi::sqlite3_stmt {
         S::as_stmt_ptr(self)
     }
 }
 
 impl Statement for *mut ffi::sqlite3_stmt {
-    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
+    fn as_stmt_ptr(&self) -> *mut ffi::sqlite3_stmt {
         *self
     }
 }
 
-impl Database for (*mut ffi::sqlite3, *mut ffi::sqlite3_stmt) {
-    fn as_ptr(&self) -> *mut libsqlite3_sys::sqlite3 {
-        self.0
-    }
-}
-
-impl Statement for (*mut ffi::sqlite3, *mut ffi::sqlite3_stmt) {
-    fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
-        self.1
-    }
-}
-
-impl<T> StatementExt for T where T: Statement + Database { }
+impl<T> StatementExt for T where T: Statement { }
 
 /// Statement operation.
-pub trait StatementExt: Statement + Database {
+pub trait StatementExt: Statement {
+    /// Returns the database connection handle to which a prepared statement belongs.
+    fn as_db_ptr(&self) -> *mut ffi::sqlite3 {
+        unsafe { ffi::sqlite3_db_handle(self.as_stmt_ptr()) }
+    }
+
     fn step(&self) -> Result<StepResult, StepError> {
         match unsafe { ffi::sqlite3_step(self.as_stmt_ptr()) } {
             ffi::SQLITE_ROW => Ok(StepResult::Row),
             ffi::SQLITE_DONE => Ok(StepResult::Done),
-            result => Err(DatabaseError::from_code(result, self.as_ptr()).into()),
+            result => Err(DatabaseError::from_code(result, self.as_db_ptr()).into()),
         }
     }
 
     fn reset(&self) -> Result<(), ResetError> {
-        ffi_stmt!(sqlite3_reset(self.as_ptr(), self.as_stmt_ptr()))
+        ffi_stmt!(sqlite3_reset(self.as_db_ptr(), self.as_stmt_ptr()))
     }
 
     fn clear_bindings(&self) -> Result<(), ResetError> {
-        ffi_stmt!(sqlite3_clear_bindings(self.as_ptr(), self.as_stmt_ptr()))
+        ffi_stmt!(sqlite3_clear_bindings(self.as_db_ptr(), self.as_stmt_ptr()))
     }
 
     // NOTE: parameter encoding
@@ -120,21 +107,21 @@ pub trait StatementExt: Statement + Database {
     ///
     /// Note that parameter index is one based.
     fn bind_int(&self, idx: i32, value: i32) -> Result<(), BindError> {
-        ffi_stmt!(sqlite3_bind_int(self.as_ptr(), self.as_stmt_ptr(), idx, value))
+        ffi_stmt!(sqlite3_bind_int(self.as_db_ptr(), self.as_stmt_ptr(), idx, value))
     }
 
     /// Bind float to parameter at given index.
     ///
     /// Note that parameter index is one based.
     fn bind_double(&self, idx: i32, value: f64) -> Result<(), BindError> {
-        ffi_stmt!(sqlite3_bind_double(self.as_ptr(), self.as_stmt_ptr(), idx, value))
+        ffi_stmt!(sqlite3_bind_double(self.as_db_ptr(), self.as_stmt_ptr(), idx, value))
     }
 
     /// Bind null to parameter at given index.
     ///
     /// Note that parameter index is one based.
     fn bind_null(&self, idx: i32) -> Result<(), BindError> {
-        ffi_stmt!(sqlite3_bind_null(self.as_ptr(), self.as_stmt_ptr(), idx))
+        ffi_stmt!(sqlite3_bind_null(self.as_db_ptr(), self.as_stmt_ptr(), idx))
     }
 
     // todo: maybe choose other than SQLITE_TRANSIENT
@@ -144,7 +131,7 @@ pub trait StatementExt: Statement + Database {
     /// Note that parameter index is one based.
     fn bind_text<S: SqliteStr>(&self, idx: i32, text: S) -> Result<(), BindError> {
         let (ptr, len, dtor) = text.as_sqlite_str()?;
-        ffi_stmt!(sqlite3_bind_text(self.as_ptr(), self.as_stmt_ptr(), idx, ptr, len, dtor))
+        ffi_stmt!(sqlite3_bind_text(self.as_db_ptr(), self.as_stmt_ptr(), idx, ptr, len, dtor))
     }
 
     /// Bind blob to parameter at given index.
@@ -152,7 +139,7 @@ pub trait StatementExt: Statement + Database {
     /// Note that parameter index is one based.
     fn bind_blob(&self, idx: i32, data: &[u8]) -> Result<(), BindError> {
         ffi_stmt!(sqlite3_bind_blob(
-            self.as_ptr(),
+            self.as_db_ptr(),
             self.as_stmt_ptr(),
             idx,
             data.as_ptr().cast(),
@@ -214,7 +201,7 @@ pub trait StatementExt: Statement + Database {
     ///
     /// <https://sqlite.org/c3ref/finalize.html>
     fn finalize(&self) -> Result<(), DatabaseError> {
-        ffi_stmt!(sqlite3_finalize(self.as_ptr(), self.as_stmt_ptr()) as _)
+        ffi_stmt!(sqlite3_finalize(self.as_db_ptr(), self.as_stmt_ptr()) as _)
     }
 }
 

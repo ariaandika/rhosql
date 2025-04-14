@@ -61,7 +61,7 @@ where
         loop {
             match stmt.step()? {
                 StepResult::Row => {
-                    let row = Row::new((self.db.as_ptr(), stmt.as_stmt_ptr()));
+                    let row = Row::new(stmt.as_stmt_ptr());
                     rows.push(R::from_row(row)?);
                 }
                 StepResult::Done => break,

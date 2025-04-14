@@ -12,21 +12,13 @@ use crate::{
 /// unencoded row buffer
 #[derive(Debug)]
 pub struct Row<'row> {
-    handle: (
-        *mut libsqlite3_sys::sqlite3,
-        *mut libsqlite3_sys::sqlite3_stmt,
-    ),
+    handle: *mut libsqlite3_sys::sqlite3_stmt,
     col_count: i32,
     _p: PhantomData<&'row mut ()>,
 }
 
 impl<'row> Row<'row> {
-    pub fn new(
-        handle: (
-            *mut libsqlite3_sys::sqlite3,
-            *mut libsqlite3_sys::sqlite3_stmt,
-        ),
-    ) -> Self {
+    pub fn new(handle: *mut libsqlite3_sys::sqlite3_stmt) -> Self {
         Self {
             col_count: handle.data_count(),
             handle,
@@ -37,7 +29,7 @@ impl<'row> Row<'row> {
     /// try get single column from given index
     pub fn try_column(&self, idx: i32) -> Result<ValueRef, DecodeError> {
         if idx >= self.col_count {
-            return Err(DecodeError::IndexOutOfBounds)
+            return Err(DecodeError::IndexOutOfBounds);
         }
         ValueRef::decode(idx, &self.handle)
     }

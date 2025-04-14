@@ -69,22 +69,13 @@ impl Drop for SqliteHandle {
 #[derive(Debug)]
 pub struct StatementHandle {
     stmt: *mut ffi::sqlite3_stmt,
-    db: *mut ffi::sqlite3,
 }
 
 impl StatementHandle {
     pub fn prepare_v2<DB: Database, S: SqliteStr>(db: DB, sql: S) -> Result<Self, PrepareError> {
-        let db = db.as_ptr();
         Ok(Self {
-            stmt: super::statement::prepare_v2(db, sql)?,
-            db,
+            stmt: super::statement::prepare_v2(db.as_ptr(), sql)?,
         })
-    }
-}
-
-impl Database for StatementHandle {
-    fn as_ptr(&self) -> *mut libsqlite3_sys::sqlite3 {
-        self.db
     }
 }
 

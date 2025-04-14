@@ -12,7 +12,7 @@ mod common;
 pub mod sqlite;
 
 // high level api
-mod connection;
+pub mod connection;
 pub mod statement;
 pub mod row_stream;
 pub mod row;
