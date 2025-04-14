@@ -90,6 +90,16 @@ impl ValueRef<'_> {
         };
         Ok(value)
     }
+
+    pub fn data_type(&self) -> DataType {
+        match self {
+            ValueRef::Null => DataType::Null,
+            ValueRef::Int(_) => DataType::Int,
+            ValueRef::Float(_) => DataType::Float,
+            ValueRef::Text(_) => DataType::Text,
+            ValueRef::Blob(_) => DataType::Blob,
+        }
+    }
 }
 
 impl<'a> ValueRef<'a> {
@@ -151,12 +161,16 @@ macro_rules! decode {
             }
         }
     };
-    ($ty:ty, $pat:pat => $expr:expr) => {
+    ($ty:ty, $dt:expr, $pat:pat => $expr:expr) => {
         impl Decode<'_> for $ty {
             fn decode(value: ValueRef) -> Result<Self> {
                 match value {
                     $pat => Ok($expr),
-                    _ => Err(DecodeError::InvalidDataType.into()),
+                    _ => Err(DecodeError::InvalidDataType {
+                        expect: $dt,
+                        found: value.data_type(),
+                    }
+                    .into()),
                 }
             }
         }
@@ -172,7 +186,11 @@ impl<'a> Decode<'a> for &'a str {
     fn decode(value: ValueRef<'a>) -> Result<Self> {
         match value {
             ValueRef::Text(t) => Ok(t),
-            _ => Err(DecodeError::InvalidDataType.into()),
+            _ => Err(DecodeError::InvalidDataType {
+                expect: DataType::Text,
+                found: value.data_type(),
+            }
+            .into()),
         }
     }
 }
@@ -181,14 +199,18 @@ impl<'a> Decode<'a> for &'a [u8] {
     fn decode(value: ValueRef<'a>) -> Result<Self> {
         match value {
             ValueRef::Blob(t) => Ok(t),
-            _ => Err(DecodeError::InvalidDataType.into()),
+            _ => Err(DecodeError::InvalidDataType {
+                expect: DataType::Blob,
+                found: value.data_type(),
+            }
+            .into()),
         }
     }
 }
 
-decode!((), ValueRef::Null => ());
-decode!(i32, ValueRef::Int(i) => i);
-decode!(f64, ValueRef::Float(i) => i);
+decode!((), DataType::Null, ValueRef::Null => ());
+decode!(i32, DataType::Int, ValueRef::Int(i) => i);
+decode!(f64, DataType::Float, ValueRef::Float(i) => i);
 decode!(&str as String);
 decode!(&[u8] as Vec<u8>);
 

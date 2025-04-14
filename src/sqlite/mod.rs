@@ -48,6 +48,18 @@ flags! {
     SQLITE_BLOB => Blob,
 }
 
+impl std::fmt::Display for DataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataType::Null => f.write_str("null"),
+            DataType::Int => f.write_str("int"),
+            DataType::Float => f.write_str("double"),
+            DataType::Text => f.write_str("text"),
+            DataType::Blob => f.write_str("blob"),
+        }
+    }
+}
+
 flags! {
     /// Return type for [`sqlite3_step`][ty].
     ///

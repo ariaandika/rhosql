@@ -1,4 +1,6 @@
 //! Operation specific error
+use super::DataType;
+
 use libsqlite3_sys::{self as ffi};
 use std::{
     ffi::{CStr, NulError},
@@ -248,7 +250,7 @@ display_error! {
 /// An error when failed to decode value
 pub enum DecodeError {
     IndexOutOfBounds,
-    InvalidDataType,
+    InvalidDataType { expect: DataType, found: DataType },
     Utf8(Utf8Error),
 }
 
@@ -257,6 +259,6 @@ display_error! {
     #prefix "Failed to decode value: ",
     #delegate Utf8,
     Self::IndexOutOfBounds => ("row index out of bounds"),
-    Self::InvalidDataType => ("datatype requested missmatch"),
+    Self::InvalidDataType { expect, found }=> ("datatype requested missmatch, expect `{expect}` found `{found}`"),
 }
 
