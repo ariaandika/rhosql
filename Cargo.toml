@@ -2,6 +2,14 @@
 name = "rhosql"
 version = "0.1.0"
 edition = "2024"
+authors = ["ariaandika"]
+description = "SQLite Toolkit"
+repository = "https://github.com/ariaandika/rhosql"
+documentation = "https://docs.rs/rhosql/"
+readme = "README.md"
+keywords = ["sqlite", "database"]
+license = "MIT"
+categories = ["database"]
 
 [workspace]
 members = [ "example","rhosql-macros"]
