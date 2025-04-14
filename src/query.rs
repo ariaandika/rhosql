@@ -68,7 +68,7 @@ where
         Ok(rows)
     }
 
-    /// Collect one row optionally.
+    /// Retrieve one row optionally.
     pub fn fetch_optional<R: FromRow>(self) -> Result<Option<R>> {
         let stmt = self.db.prepare(self.sql)?;
 
@@ -76,15 +76,27 @@ where
             param.bind(idx, &stmt)?;
         }
 
-        let row = match stmt.step()? {
+        match stmt.step()? {
             StepResult::Row => {
                 let row = Row::new(stmt.as_stmt_ptr());
-                Some(R::from_row(row)?)
+                Ok(Some(R::from_row(row)?))
             }
-            StepResult::Done => None,
-        };
+            StepResult::Done => Ok(None),
+        }
+    }
 
-        Ok(row)
+    /// Execute statement and return value of `last_insert_rowid`
+    pub fn execute(self) -> Result<i64> {
+        use crate::sqlite::DatabaseExt;
+        let stmt = self.db.prepare(self.sql)?;
+
+        for (param,idx) in self.params.into_iter().zip(1i32..) {
+            param.bind(idx, &stmt)?;
+        }
+
+        stmt.step()?;
+
+        Ok(self.db.as_ptr().last_insert_rowid())
     }
 }
 
