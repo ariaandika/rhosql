@@ -8,6 +8,7 @@ struct User {
 fn main() {
     env_logger::init();
     query_api().unwrap();
+    multithread_lock().unwrap();
     low_level().unwrap();
 }
 
@@ -15,7 +16,7 @@ fn query_api() -> rhosql::Result<()> {
     use rhosql::Connection;
 
     // derive macro
-    #[derive(rhosql::FromRow)]
+    #[derive(Debug, rhosql::FromRow)]
     struct Post {
         id: i32,
         name: String,
@@ -50,6 +51,44 @@ fn query_api() -> rhosql::Result<()> {
         assert_eq!(post.id as i64, id);
         assert_eq!(post.name, "Control");
     }
+
+    Ok(())
+}
+
+fn multithread_lock() -> rhosql::Result<()> {
+    use std::thread;
+    use rhosql::SerializeConnection;
+
+    std::fs::remove_file("db.sqlite").ok();
+
+    let db = SerializeConnection::open("db.sqlite")?;
+    let dbd = db.clone();
+    let db1 = db.clone();
+    let db2 = db.clone();
+
+    let t1 = thread::spawn(move||{
+        rhosql::query("create table if not exists post(name)", &db1).execute()?;
+        rhosql::query("insert into post(name) values(?1)", &db1)
+            .bind("John")
+            .execute()
+    });
+
+    let t2 = thread::spawn(move||{
+        rhosql::query("create table if not exists post(name)", &db2).execute()?;
+        rhosql::query("insert into post(name) values(?1)", &db2)
+            .bind("Diesel")
+            .execute()
+    });
+
+    drop(db);
+
+    t1.join().unwrap()?;
+    t2.join().unwrap()?;
+
+    let posts = rhosql::query("select rowid,name from post", &dbd).fetch_all::<(i32, String)>()?;
+
+    assert!(posts.iter().find(|e|matches!(e.1.as_str(),"John")).is_some());
+    assert!(posts.iter().find(|e|matches!(e.1.as_str(),"Diesel")).is_some());
 
     Ok(())
 }
