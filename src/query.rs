@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// An executor which used in `query` api.
-pub trait Execute<'s>: Database {
+pub trait Execute<'s> {
     fn prepare<S: SqliteStr>(self, sql: S) -> Result<StatementRef<'s>>;
 }
 
@@ -22,6 +22,7 @@ impl<'s> Execute<'s> for &'s mut SqliteHandle {
 
 /// Either borrowed or owned prepared statement.
 pub enum StatementRef<'a> {
+    Handle(*mut libsqlite3_sys::sqlite3_stmt),
     Borrow(&'a StatementHandle),
     Owned(StatementHandle),
 }
@@ -29,6 +30,7 @@ pub enum StatementRef<'a> {
 impl Statement for StatementRef<'_> {
     fn as_stmt_ptr(&self) -> *mut libsqlite3_sys::sqlite3_stmt {
         match self {
+            StatementRef::Handle(h) => *h,
             StatementRef::Borrow(s) => s.as_stmt_ptr(),
             StatementRef::Owned(s) => s.as_stmt_ptr(),
         }
@@ -102,6 +104,9 @@ where
             rows.push(R::from_row(row)?);
         }
 
+        stmt.clear_bindings()?;
+        stmt.reset()?;
+
         Ok(rows)
     }
 
@@ -113,13 +118,18 @@ where
             param.bind(idx, &stmt)?;
         }
 
-        match stmt.step()? {
+        let row = match stmt.step()? {
             StepResult::Row => {
                 let row = Row::new(stmt.as_stmt_ptr());
                 Ok(Some(R::from_row(row)?))
             }
             StepResult::Done => Ok(None),
-        }
+        };
+
+        stmt.clear_bindings()?;
+        stmt.reset()?;
+
+        row
     }
 
     /// Retrieve row by [`Iterator`]
@@ -135,14 +145,16 @@ where
 
     /// Execute statement and return value of `last_insert_rowid`.
     pub fn execute(self) -> Result<i64> {
-        let db = self.db.as_ptr();
         let stmt = self.db.prepare(self.sql)?;
+        let db = stmt.as_db_ptr();
 
         for (param,idx) in self.params.into_iter().zip(1i32..) {
             param.bind(idx, &stmt)?;
         }
 
         stmt.step()?;
+        stmt.clear_bindings()?;
+        stmt.reset()?;
 
         Ok(db.last_insert_rowid())
     }

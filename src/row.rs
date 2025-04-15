@@ -216,7 +216,7 @@ decode!(&[u8] as Vec<u8>);
 
 
 /// A type that can be construced from sqlite row.
-pub trait FromRow: Sized {
+pub trait FromRow: Sized + std::fmt::Debug {
     fn from_row(row: Row) -> Result<Self>;
 }
 
@@ -224,7 +224,7 @@ macro_rules! from_tuple {
     ($($id:ident $i:literal),*) => {
         impl<$($id),*> FromRow for ($($id),*,)
         where
-            $($id: for<'a> Decode<'a>),*
+            $($id: for<'a> Decode<'a>+ std::fmt::Debug ),*
         {
             fn from_row(row: Row) -> Result<Self> {
                 Ok((

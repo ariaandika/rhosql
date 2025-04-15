@@ -60,6 +60,7 @@ pub mod query;
 
 // shared state
 mod connection;
+mod serialize;
 mod pool;
 
 // subtypes
@@ -76,6 +77,7 @@ pub use query::query;
 
 pub use common::SqliteStr;
 pub use connection::Connection;
+pub use serialize::SerializeConnection;
 pub use row_stream::RowStream;
 pub use row::{Decode, FromRow, Row, ValueRef};
 pub use rhosql_macros::FromRow;
